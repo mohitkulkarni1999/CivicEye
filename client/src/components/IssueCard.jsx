@@ -24,7 +24,9 @@ export default function IssueCard({ issue }) {
     priority_score,
   } = issue;
 
-  const img = cover_thumb || cover_url;
+  const beforeImg = cover_thumb || cover_url;
+  const afterImg = issue.after_thumb || issue.after_url;
+  const isResolved = ['RESOLVED', 'VERIFIED_RESOLVED'].includes(status);
 
   return (
     <Link
@@ -32,9 +34,46 @@ export default function IssueCard({ issue }) {
       className="card group overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lift"
     >
       <div className="relative aspect-[16/10] w-full overflow-hidden bg-ink-100">
-        {img ? (
+        {isResolved && (beforeImg || afterImg) ? (
+          <div className="grid h-full w-full grid-cols-2 gap-0.5 bg-ink-900">
+            <div className="relative h-full w-full overflow-hidden">
+              {beforeImg ? (
+                <img
+                  src={beforeImg}
+                  alt={`${title} - Before`}
+                  loading="lazy"
+                  className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center bg-ink-200 text-xs text-ink-500">No Before</div>
+              )}
+              <span className="absolute bottom-1.5 left-1.5 rounded-full bg-ink-900/80 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur">
+                BEFORE
+              </span>
+            </div>
+
+            <div className="relative h-full w-full overflow-hidden">
+              {afterImg ? (
+                <img
+                  src={afterImg}
+                  alt={`${title} - After`}
+                  loading="lazy"
+                  className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center bg-emerald-950/80 p-2 text-center text-emerald-300">
+                  <span className="text-base">✓</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider">FIXED</span>
+                </div>
+              )}
+              <span className="absolute bottom-1.5 right-1.5 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">
+                AFTER (FIXED)
+              </span>
+            </div>
+          </div>
+        ) : beforeImg ? (
           <img
-            src={img}
+            src={beforeImg}
             alt={title}
             loading="lazy"
             className="h-full w-full object-cover transition duration-300 group-hover:scale-105"

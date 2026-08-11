@@ -208,7 +208,9 @@ export const listIssues = asyncHandler(async (req, res) => {
             COALESCE(
               (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary LIMIT 1),
               (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id ORDER BY x.created_at ASC LIMIT 1)
-            ) AS cover_thumb
+            ) AS cover_thumb,
+            (SELECT x.url FROM issue_images x WHERE x.issue_id = i.id AND x.kind = 'after' LIMIT 1) AS after_url,
+            (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id AND x.kind = 'after' LIMIT 1) AS after_thumb
        FROM issues i
        JOIN categories c ON c.id = i.category_id
        LEFT JOIN departments d ON d.id = i.department_id
@@ -662,7 +664,9 @@ export const myIssues = asyncHandler(async (req, res) => {
             COALESCE(
               (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary LIMIT 1),
               (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id ORDER BY x.created_at ASC LIMIT 1)
-            ) AS cover_thumb
+            ) AS cover_thumb,
+            (SELECT x.url FROM issue_images x WHERE x.issue_id = i.id AND x.kind = 'after' LIMIT 1) AS after_url,
+            (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id AND x.kind = 'after' LIMIT 1) AS after_thumb
        FROM issues i
        JOIN categories c ON c.id = i.category_id
        LEFT JOIN departments d ON d.id = i.department_id
@@ -688,7 +692,9 @@ export const myConfirmedIssues = asyncHandler(async (req, res) => {
             COALESCE(
               (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary LIMIT 1),
               (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id ORDER BY x.created_at ASC LIMIT 1)
-            ) AS cover_thumb
+            ) AS cover_thumb,
+            (SELECT x.url FROM issue_images x WHERE x.issue_id = i.id AND x.kind = 'after' LIMIT 1) AS after_url,
+            (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id AND x.kind = 'after' LIMIT 1) AS after_thumb
        FROM issue_confirmations cf
        JOIN issues i ON i.id = cf.issue_id
        JOIN categories c ON c.id = i.category_id
