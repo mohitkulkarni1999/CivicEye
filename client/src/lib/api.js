@@ -28,7 +28,8 @@ async function parseResponse(res) {
 }
 
 export async function api(path, { method = 'GET', body, formData, params } = {}) {
-  const url = new URL(path, window.location.origin);
+  const BASE_URL = import.meta.env.VITE_API_URL || window.location.origin;
+  const url = new URL(path, BASE_URL);
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
