@@ -34,6 +34,10 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 app.use(requestLogger);
 app.use(generalLimiter);
 
+app.get('/', (_req, res) => {
+  res.json({ message: 'CivicEye Backend API Server is running!', health: '/api/health' });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'civiceye-api', time: new Date().toISOString() });
 });
