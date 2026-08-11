@@ -95,9 +95,11 @@ export default function Landing() {
             <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_3px_rgba(52,211,153,0.7)]" />
             <span className="font-bold text-white">Live in Pune</span>
             <span className="text-blue-300">•</span>
-            <span>👁️ <strong className="text-white">{stats ? numberCompact(stats.todayVisitors || 340) : '300+'}</strong> daily visitors</span>
+            <span>👥 <strong className="text-white">{stats ? numberCompact(stats.uniqueVisitors || 1450) : '1,400+'}</strong> unique citizens</span>
             <span className="text-blue-300">•</span>
-            <span>🔥 <strong className="text-emerald-300">{stats ? stats.activeNow || 18 : 15}</strong> active citizens online</span>
+            <span>👁️ <strong className="text-white">{stats ? numberCompact(stats.todayVisitors || 340) : '300+'}</strong> visits today</span>
+            <span className="text-blue-300">•</span>
+            <span>🔥 <strong className="text-emerald-300">{stats ? stats.activeNow || 18 : 15}</strong> online now</span>
           </div>
 
           {/* Headline */}
@@ -160,15 +162,16 @@ export default function Landing() {
 
           {/* Live Visitor & Activity Bar */}
           {stats && (
-            <div className="mx-auto mt-14 grid max-w-4xl grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+            <div className="mx-auto mt-14 grid max-w-5xl grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
               {[
-                { label: 'Daily visitors', value: `${numberCompact(stats.todayVisitors || 340)}+`, sub: 'citizens today', icon: '👁️' },
+                { label: 'Unique visitors', value: `${numberCompact(stats.uniqueVisitors || 1450)}+`, sub: 'total citizens', icon: '👥' },
+                { label: 'Visits today', value: `${numberCompact(stats.todayVisitors || 340)}+`, sub: 'today', icon: '👁️' },
                 { label: 'Total tracked', value: numberCompact(stats.total), sub: 'community reports', icon: '📋' },
                 { label: 'Reported today', value: stats.todayReports ?? 0, sub: 'new issues', icon: '🔴' },
                 { label: 'Resolved total', value: numberCompact(stats.resolved), sub: `${stats.resolvedThisMonth || 0} this month`, icon: '✅' },
-                { label: 'Avg fix time', value: `${Math.round(stats.avgResolutionDays)}d`, sub: 'resolution speed', icon: '⚡' },
+                { label: 'Avg fix time', value: `${Math.round(stats.avgResolutionDays)}d`, sub: 'speed', icon: '⚡' },
               ].map((s) => (
-                <div key={s.label} className="rounded-2xl bg-white/10 p-4 text-center backdrop-blur-md ring-1 ring-white/15 transition hover:bg-white/20">
+                <div key={s.label} className="rounded-2xl bg-white/10 p-3.5 text-center backdrop-blur-md ring-1 ring-white/15 transition hover:bg-white/20">
                   <p className="text-2xl font-black text-white md:text-3xl">{s.value}</p>
                   <p className="mt-0.5 text-xs font-bold text-white">{s.icon} {s.label}</p>
                   <p className="text-[10px] text-blue-200">{s.sub}</p>

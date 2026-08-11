@@ -450,6 +450,58 @@ export default function IssueDetail() {
               </button>
             </div>
 
+            {/* AI Action & Contact Guidance for Citizens */}
+            <div className="mt-5 overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50/70 to-blue-50/70 shadow-sm">
+              <div className="flex items-center gap-2 border-b border-violet-100 bg-white/80 px-4 py-2.5">
+                <SparklesIcon size={15} className="text-violet-600" />
+                <p className="text-xs font-bold uppercase tracking-wider text-violet-800">
+                  AI Citizen Action Guide — What can you do?
+                </p>
+              </div>
+              <div className="p-4 space-y-3 text-xs">
+                {/* Path 1: Just raise it */}
+                <div className="flex items-start gap-2.5 rounded-xl bg-white p-3 ring-1 ring-violet-100">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-xs">⚡</span>
+                  <div>
+                    <p className="font-bold text-ink-900">Option 1: Just raise & relax</p>
+                    <p className="mt-0.5 text-ink-600 leading-relaxed">
+                      Your report is mapped and visible to everyone. The community and local teams can track it. No further action needed from your side.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Path 2: Community boost */}
+                <div className="flex items-start gap-2.5 rounded-xl bg-white p-3 ring-1 ring-violet-100">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-xs">📢</span>
+                  <div>
+                    <p className="font-bold text-ink-900">Option 2: Boost visibility & community votes</p>
+                    <p className="mt-0.5 text-ink-600 leading-relaxed">
+                      Click <strong className="text-brand-700">Confirm</strong> or <strong className="text-brand-700">Follow</strong> above, add an extra evidence photo below, or share this report link with neighbors to push its priority score higher.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Path 3: Who to contact / escalation */}
+                <div className="flex items-start gap-2.5 rounded-xl bg-white p-3 ring-1 ring-violet-100">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-purple-100 text-xs">📞</span>
+                  <div>
+                    <p className="font-bold text-ink-900">Option 3: Escalation & Contact Info</p>
+                    <p className="mt-0.5 text-ink-600 leading-relaxed">
+                      Responsible department: <strong className="text-ink-900">{issue.department?.name || 'Local Operations'}</strong> ({issue.category?.name}).
+                      {issue.officer_name ? (
+                        <> Area representative: <strong className="text-ink-900">{issue.officer_name}</strong> ({issue.officer_role}).</>
+                      ) : (
+                        <> Mapped to locality: <strong className="text-ink-900">{issue.area || issue.city || 'Pune'}</strong>.</>
+                      )}
+                      {issue.severity === 'CRITICAL' && (
+                        <span className="ml-1 font-bold text-red-600">⚠️ High priority issue — flagged for urgent field team dispatch.</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {confirmOpen && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
                 <p className="text-sm font-semibold text-ink-900">Reopen this issue?</p>
