@@ -11,7 +11,7 @@ export default function Footer() {
             <span className="text-lg font-bold text-white">CivicEye</span>
           </div>
           <p className="mt-3 text-sm text-ink-400">
-            AI-powered civic issue reporting and accountability for smarter cities.
+            AI-powered civic issue reporting and community resolution for smarter cities.
           </p>
         </div>
         <div>

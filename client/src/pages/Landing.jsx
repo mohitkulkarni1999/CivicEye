@@ -48,7 +48,7 @@ export default function Landing() {
         <div className="pointer-events-none absolute -bottom-24 -left-24 h-80 w-80 rounded-full bg-ink-900/20 blur-2xl" />
         <div className="container-page relative py-20 text-center md:py-28">
           <span className="badge inline-flex items-center gap-1.5 bg-white/15 text-white">
-            <MapPinIcon size={14} /> Pune · AI-powered civic accountability
+            <MapPinIcon size={14} /> Pune · AI-powered civic issue resolution
           </span>
           <h1 className="mx-auto mt-5 max-w-3xl text-4xl font-extrabold leading-tight tracking-tight md:text-6xl">
             See it. Report it. <span className="text-brand-200">Watch it get fixed.</span>
@@ -217,7 +217,7 @@ export default function Landing() {
               <div>
                 <h3 className="text-lg font-bold text-ink-900">Spotted a civic problem in your area?</h3>
                 <p className="mt-1 text-sm text-ink-600">
-                  Upload your issue here to hold local government accountable! Track your issue step-by-step from report to repair.
+                  Report your issue here to help city departments take action! Track your report step-by-step from submission to repair.
                 </p>
               </div>
               <div className="mt-4 flex shrink-0 items-center justify-center gap-3 md:mt-0">
