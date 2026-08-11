@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { http } from '../lib/api.js';
 import { StatusBadge, SeverityBadge, CategoryBadge } from '../components/Badges.jsx';
@@ -19,6 +19,9 @@ import {
   BotIcon,
   MapPinIcon,
   MicIcon,
+  CheckIcon,
+  AlertIcon,
+  SparklesIcon,
 } from '../components/icons.jsx';
 
 export default function IssueDetail() {
@@ -37,6 +40,10 @@ export default function IssueDetail() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
+  const [repairVerification, setRepairVerification] = useState(null);
+  const [repairChecking, setRepairChecking] = useState(false);
+  const [modWarning, setModWarning] = useState('');
+  const modTimer = useRef(null);
   const toast = useToast();
 
   const load = () => {
@@ -55,6 +62,39 @@ export default function IssueDetail() {
   };
 
   useEffect(() => { load(); }, [id]);
+
+  // Repair verification — runs after issue loads if before+after photos exist and resolved
+  useEffect(() => {
+    if (!issue) return;
+    const isResolved = ['RESOLVED', 'VERIFIED_RESOLVED'].includes(issue.status);
+    if (!isResolved) return;
+    const imgs = issue.images || [];
+    const bImg = imgs.find((im) => im.kind === 'before' || im.is_primary) || imgs[0];
+    const aImg = imgs.find((im) => im.kind === 'after');
+    if (!bImg || !aImg) return;
+    let cancelled = false;
+    setRepairChecking(true);
+    http.post('/api/ai/verify-repair', { beforeImageId: bImg.id, afterImageId: aImg.id })
+      .then((r) => { if (!cancelled) setRepairVerification(r.verification); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setRepairChecking(false); });
+    return () => { cancelled = true; };
+  }, [issue?.id, issue?.status]);
+
+  // Comment moderation — debounced soft warning
+  const onCommentChange = (val) => {
+    setComment(val);
+    setModWarning('');
+    clearTimeout(modTimer.current);
+    if (val.trim().length < 10) return;
+    modTimer.current = setTimeout(async () => {
+      try {
+        const res = await http.post('/api/ai/moderate-text', { text: val });
+        if (res.score > 0.65) setModWarning(res.reason || 'This comment may be flagged as inappropriate.');
+        else setModWarning('');
+      } catch { /* silent */ }
+    }, 900);
+  };
 
   if (loading) {
     return (
@@ -276,10 +316,36 @@ export default function IssueDetail() {
 
           {beforePhoto && afterPhoto && (
             <div className="card mt-4 overflow-hidden">
-              <div className="border-b border-ink-100 px-5 py-3">
-                <h3 className="font-semibold text-ink-900">Before / After</h3>
-                <p className="text-xs text-ink-500">Officer-uploaded resolution photos — visible to everyone</p>
+              <div className="flex items-center justify-between border-b border-ink-100 px-5 py-3">
+                <div>
+                  <h3 className="font-semibold text-ink-900">Before / After</h3>
+                  <p className="text-xs text-ink-500">Officer-uploaded resolution photos</p>
+                </div>
+                {/* AI Repair Verification Badge */}
+                {repairChecking && (
+                  <span className="flex items-center gap-1.5 rounded-full bg-ink-100 px-3 py-1 text-xs text-ink-500">
+                    <Spinner className="h-3 w-3" /> AI verifying repair…
+                  </span>
+                )}
+                {!repairChecking && repairVerification && (
+                  repairVerification.repaired ? (
+                    <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+                      <CheckIcon size={13} className="text-emerald-600" />
+                      AI verified repair · {Math.round((repairVerification.confidence || 0) * 100)}%
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
+                      <AlertIcon size={13} className="text-amber-500" />
+                      Repair unconfirmed by AI
+                    </span>
+                  )
+                )}
               </div>
+              {repairVerification?.summary && (
+                <p className="flex items-center gap-2 border-b border-ink-100 bg-ink-50 px-5 py-2 text-xs text-ink-600">
+                  <SparklesIcon size={12} className="text-violet-500" /> {repairVerification.summary}
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-3 p-4">
                 <figure>
                   <img
@@ -287,19 +353,15 @@ export default function IssueDetail() {
                     alt="Before the fix"
                     className="h-40 w-full rounded-lg border border-ink-100 object-cover"
                   />
-                  <figcaption className="mt-1 text-center text-xs font-semibold uppercase tracking-wide text-ink-500">
-                    Before
-                  </figcaption>
+                  <figcaption className="mt-1 text-center text-xs font-semibold uppercase tracking-wide text-ink-500">Before</figcaption>
                 </figure>
                 <figure>
                   <img
                     src={afterPhoto.thumb_url || afterPhoto.url}
                     alt="After the fix"
-                    className="h-40 w-full rounded-lg border border-brand-300 object-cover"
+                    className="h-40 w-full rounded-lg border border-emerald-300 object-cover"
                   />
-                  <figcaption className="mt-1 text-center text-xs font-semibold uppercase tracking-wide text-brand-600">
-                    After
-                  </figcaption>
+                  <figcaption className="mt-1 text-center text-xs font-semibold uppercase tracking-wide text-emerald-600">After ✓</figcaption>
                 </figure>
               </div>
             </div>
@@ -423,14 +485,21 @@ export default function IssueDetail() {
             <h3 className="mb-4 font-semibold text-ink-900">
               Discussion <span className="text-ink-400">({comments.length})</span>
             </h3>
-            <form onSubmit={postComment} className="mb-5 flex gap-2">
-              <input
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Add a comment…"
-                className="input"
-              />
-              <button disabled={busy === 'comment'} className="btn-primary shrink-0">Post</button>
+            <form onSubmit={postComment} className="mb-5">
+              <div className="flex gap-2">
+                <input
+                  value={comment}
+                  onChange={(e) => onCommentChange(e.target.value)}
+                  placeholder="Add a comment…"
+                  className={`input ${modWarning ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-200' : ''}`}
+                />
+                <button disabled={busy === 'comment'} className="btn-primary shrink-0">Post</button>
+              </div>
+              {modWarning && (
+                <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700">
+                  <AlertIcon size={12} className="text-amber-500" /> ⚠️ {modWarning}
+                </p>
+              )}
             </form>
             <div className="space-y-4">
               {comments.map((c) => (

@@ -14,14 +14,35 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [digest, setDigest] = useState(null);
   const [digesting, setDigesting] = useState(false);
+  const [autoTriggered, setAutoTriggered] = useState(false);
   const toast = useToast();
+
+  const summarize = async () => {
+    if (digesting) return;
+    setDigesting(true);
+    try {
+      const res = await http.post('/api/notifications/digest');
+      setDigest(res.digest || 'No updates to summarize.');
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setDigesting(false);
+    }
+  };
 
   const load = () => {
     http
       .get('/api/notifications')
       .then((d) => {
-        setNotifs(d.notifications || []);
-        setUnread(d.unread || 0);
+        const list = d.notifications || [];
+        const unreadCount = d.unread || 0;
+        setNotifs(list);
+        setUnread(unreadCount);
+        // Auto-trigger AI digest if 3+ unread on first load
+        if (unreadCount >= 3 && !autoTriggered) {
+          setAutoTriggered(true);
+          summarize();
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -37,20 +58,7 @@ export default function NotificationsPage() {
 
   const markOne = async (id) => {
     await http.patch(`/api/notifications/${id}/read`);
-    setDigest(null);
     load();
-  };
-
-  const summarize = async () => {
-    setDigesting(true);
-    try {
-      const res = await http.post('/api/notifications/digest');
-      setDigest(res.digest || 'No updates to summarize.');
-    } catch (e) {
-      toast.error(e.message);
-    } finally {
-      setDigesting(false);
-    }
   };
 
   if (loading) {
@@ -70,30 +78,58 @@ export default function NotificationsPage() {
           <h1 className="flex items-center gap-2 text-2xl font-bold text-ink-900">
             <BellIcon size={22} className="text-brand-600" /> Notifications
           </h1>
-          <p className="mt-1 text-sm text-ink-500">{unread} unread</p>
+          <p className="mt-1 text-sm text-ink-500">
+            {unread > 0 ? (
+              <span className="font-semibold text-brand-700">{unread} unread</span>
+            ) : (
+              'All caught up!'
+            )}
+          </p>
         </div>
-        {unread > 0 && (
-          <div className="flex gap-2">
-            <button onClick={summarize} disabled={digesting} className="btn-primary text-sm">
-              {digesting ? (
-                <><Spinner className="h-4 w-4" /> Summarizing…</>
-              ) : (
-                <><SparklesIcon size={16} /> AI summary</>
-              )}
-            </button>
+        <div className="flex gap-2">
+          <button
+            onClick={summarize}
+            disabled={digesting || notifs.length === 0}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-bold text-white shadow transition hover:opacity-90 disabled:opacity-50"
+          >
+            {digesting ? (
+              <><Spinner className="h-4 w-4" /> Summarizing…</>
+            ) : (
+              <><SparklesIcon size={15} /> AI summary</>
+            )}
+          </button>
+          {unread > 0 && (
             <button onClick={markAll} className="btn-outline text-sm">
               <CheckIcon size={16} /> Mark all read
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {digest && (
-        <div className="mb-4 rounded-2xl border border-brand-200 bg-brand-50 p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-brand-800">
-            <SparklesIcon size={16} /> AI summary
-          </h3>
-          <p className="mt-1 text-sm text-brand-900">{digest}</p>
+      {/* AI Digest Card */}
+      {(digest || digesting) && (
+        <div className="mb-5 overflow-hidden rounded-2xl shadow-md">
+          <div
+            className="flex items-center gap-2 px-4 py-3 text-white"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#1a56db)' }}
+          >
+            <SparklesIcon size={16} />
+            <p className="text-sm font-bold">AI Notification Summary</p>
+            {digest && (
+              <button onClick={() => setDigest(null)} className="ml-auto text-[11px] text-white/70 hover:text-white">
+                Dismiss
+              </button>
+            )}
+          </div>
+          <div className="bg-violet-50 px-4 py-3">
+            {digesting ? (
+              <div className="flex items-center gap-2 text-sm text-violet-600">
+                <Spinner className="h-4 w-4" /> Generating summary…
+              </div>
+            ) : (
+              <p className="text-sm leading-relaxed text-ink-800">{digest}</p>
+            )}
+          </div>
         </div>
       )}
 
@@ -108,7 +144,7 @@ export default function NotificationsPage() {
           {notifs.map((n) => (
             <button
               key={n.id}
-              onClick={() => n.is_read || markOne(n.id)}
+              onClick={() => !n.is_read && markOne(n.id)}
               className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition hover:bg-ink-50 ${
                 n.is_read ? 'border-ink-200 bg-white' : 'border-brand-200 bg-brand-50'
               }`}

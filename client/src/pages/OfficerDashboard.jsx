@@ -156,6 +156,7 @@ function OfficerPanel({ issue, depts, officers, onDone }) {
   const [afterImageId, setAfterImageId] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState({ type: '', text: '' });
+  const [triageSuggestion, setTriageSuggestion] = useState(null);
   const [triageLoading, setTriageLoading] = useState(false);
   const fileRef = useRef(null);
 
@@ -166,20 +167,28 @@ function OfficerPanel({ issue, depts, officers, onDone }) {
 
   const runTriage = async () => {
     setTriageLoading(true);
+    setTriageSuggestion(null);
     try {
       const res = await http.post('/api/ai/triage', { issueId: issue.id });
-      const t = res.suggestion;
-      if (t.suggestedDepartmentId) setDeptId(t.suggestedDepartmentId);
-      if (t.suggestedStatus) setToStatus(t.suggestedStatus);
-      if (t.priorityRationale) setNote(t.priorityRationale);
-      if (t.draftUpdate) setOfficialUpdate(t.draftUpdate);
-      flash('ok', 'AI suggestion applied — please review before posting');
+      setTriageSuggestion(res.suggestion);
     } catch (e) {
       flash('error', e.message);
     } finally {
       setTriageLoading(false);
     }
   };
+
+  const acceptTriage = () => {
+    if (!triageSuggestion) return;
+    const t = triageSuggestion;
+    if (t.suggestedDepartmentId) setDeptId(t.suggestedDepartmentId);
+    if (t.suggestedStatus) setToStatus(t.suggestedStatus);
+    if (t.priorityRationale) setNote(t.priorityRationale);
+    if (t.draftUpdate) setOfficialUpdate(t.draftUpdate);
+    setTriageSuggestion(null);
+    flash('ok', 'AI suggestion applied — please review before posting');
+  };
+
 
   const uploadAfter = async () => {
     if (!afterFile) return setAfterImageId('');
@@ -248,14 +257,71 @@ function OfficerPanel({ issue, depts, officers, onDone }) {
         </div>
       )}
 
-      <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2">
-        <p className="flex items-center gap-1.5 text-xs text-brand-800">
-          <SparklesIcon size={14} /> <span className="font-semibold">AI triage</span> — suggests a department, status, and a draft update. Review before posting.
-        </p>
-        <button onClick={runTriage} disabled={busy || triageLoading} className="btn-outline shrink-0 text-sm">
-          {triageLoading ? 'Thinking…' : 'Suggest'}
-        </button>
+      {/* AI Triage Row */}
+      <div className="md:col-span-2">
+        {!triageSuggestion ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 to-blue-50 px-4 py-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm font-bold text-violet-800">
+                <SparklesIcon size={14} /> AI Triage Assistant
+              </p>
+              <p className="text-xs text-violet-600">Get AI suggestions for department routing, status & a draft update.</p>
+            </div>
+            <button
+              onClick={runTriage}
+              disabled={busy || triageLoading}
+              className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow transition hover:bg-violet-700 disabled:opacity-50"
+            >
+              {triageLoading ? <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" /> Thinking…</> : <><SparklesIcon size={14} /> Suggest</>}
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-violet-200 shadow-sm">
+            <div className="flex items-center gap-2 px-4 py-2.5 text-white" style={{ background: 'linear-gradient(135deg,#7c3aed,#1a56db)' }}>
+              <SparklesIcon size={14} />
+              <p className="text-sm font-bold">AI Triage Suggestion</p>
+              <span className="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold">
+                {Math.round((triageSuggestion.confidence || 0) * 100)}% confidence
+              </span>
+            </div>
+            <div className="space-y-2 bg-violet-50 p-4">
+              {triageSuggestion.suggestedStatus && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-28 shrink-0 text-xs font-bold uppercase tracking-wide text-violet-500">Status</span>
+                  <span className="rounded-full bg-white px-3 py-0.5 font-semibold text-ink-800 shadow-sm ring-1 ring-ink-100">{triageSuggestion.suggestedStatus}</span>
+                </div>
+              )}
+              {triageSuggestion.suggestedDepartmentName && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-28 shrink-0 text-xs font-bold uppercase tracking-wide text-violet-500">Department</span>
+                  <span className="font-semibold text-ink-800">{triageSuggestion.suggestedDepartmentName}</span>
+                </div>
+              )}
+              {triageSuggestion.priorityRationale && (
+                <div className="flex items-start gap-2 text-sm">
+                  <span className="w-28 shrink-0 pt-0.5 text-xs font-bold uppercase tracking-wide text-violet-500">Rationale</span>
+                  <span className="text-ink-700">{triageSuggestion.priorityRationale}</span>
+                </div>
+              )}
+              {triageSuggestion.draftUpdate && (
+                <div className="flex items-start gap-2 text-sm">
+                  <span className="w-28 shrink-0 pt-0.5 text-xs font-bold uppercase tracking-wide text-violet-500">Draft update</span>
+                  <span className="italic text-ink-600">"{triageSuggestion.draftUpdate}"</span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 border-t border-violet-100 bg-white px-4 py-3">
+              <button onClick={acceptTriage} className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white hover:bg-violet-700 transition">
+                ✓ Accept all
+              </button>
+              <button onClick={() => setTriageSuggestion(null)} className="rounded-xl border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-600 hover:bg-ink-50 transition">
+                Modify manually
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
 
       <div>
         <label className="label">Change status to</label>

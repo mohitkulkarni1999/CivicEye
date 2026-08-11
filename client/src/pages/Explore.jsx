@@ -25,8 +25,16 @@ export default function Explore() {
   const [fSearch, setFSearch] = useState(params.get('q') || '');
   const [aiSearching, setAiSearching] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [aiParsed, setAiParsed] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const toast = useToast();
+
+  // Detect if the search query looks like natural language needing AI parsing
+  const looksNatural = (q) => {
+    const triggers = ['near', 'last', 'this week', 'month', 'critical', 'urgent', 'fixed', 'open', 'in ', 'around', 'recent', 'old'];
+    const lower = q.toLowerCase();
+    return triggers.some((t) => lower.includes(t)) && q.trim().split(' ').length > 2;
+  };
 
   useEffect(() => {
     http.get('/api/categories').then((d) => setCategories(d.categories || [])).catch(() => {});
@@ -66,6 +74,7 @@ export default function Explore() {
     if (!fSearch.trim()) return;
     setAiSearching(true);
     setAiError('');
+    setAiParsed(null);
     try {
       const res = await http.post('/api/ai/parse-query', { q: fSearch.trim() });
       setPage(1);
@@ -74,6 +83,7 @@ export default function Explore() {
       if (res.status === 'open') setFStatus('open');
       else if (res.status === 'resolved') setFStatus('RESOLVED');
       else if (res.status === 'assigned') setFStatus('ASSIGNED');
+      setAiParsed(res);
       toast.info('AI search applied your filters');
     } catch (e) {
       setAiError(e.message);
@@ -110,7 +120,7 @@ export default function Explore() {
       </div>
 
       {/* Search + toggle */}
-      <form onSubmit={searchForm} className="mb-3 flex items-center gap-2">
+      <form onSubmit={searchForm} className="mb-1 flex items-center gap-2">
         <div className="relative flex-1">
           <SearchIcon size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
           <input
@@ -125,7 +135,7 @@ export default function Explore() {
           type="button"
           onClick={aiSearch}
           disabled={aiSearching || !fSearch.trim()}
-          className="btn-outline shrink-0 text-xs"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow transition hover:opacity-90 disabled:opacity-50"
           title="Let AI understand your search"
         >
           <SparklesIcon size={14} />
@@ -140,11 +150,30 @@ export default function Explore() {
           {filtersOpen ? <XIcon size={16} /> : 'Filters'}
         </button>
       </form>
+      {/* Natural language hint */}
+      {fSearch.trim() && looksNatural(fSearch) && !aiSearching && !aiParsed && (
+        <p className="mb-2 flex items-center gap-1.5 text-xs text-violet-700">
+          <SparklesIcon size={12} /> Looks like a natural language query —{' '}
+          <button onClick={aiSearch} className="font-bold underline hover:no-underline">try AI search</button>
+        </p>
+      )}
 
       {aiError && (
         <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {aiError}
         </p>
+      )}
+      {/* AI parsed filter summary strip */}
+      {aiParsed && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5">
+          <SparklesIcon size={13} className="shrink-0 text-violet-500" />
+          <span className="text-xs font-bold text-violet-700">AI understood:</span>
+          {aiParsed.category && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800">📂 {aiParsed.category}</span>}
+          {aiParsed.severity && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800">⚠️ {aiParsed.severity}</span>}
+          {aiParsed.status && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800">🔵 {aiParsed.status}</span>}
+          {aiParsed.area && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800">📍 {aiParsed.area}</span>}
+          <button onClick={() => { setAiParsed(null); reset(); }} className="ml-auto text-[11px] text-violet-500 hover:text-violet-700 hover:underline">Clear</button>
+        </div>
       )}
 
       {/* Filters */}
