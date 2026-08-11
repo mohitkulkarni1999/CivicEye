@@ -32,6 +32,8 @@ export const env = {
   s3AccessKey: process.env.S3_ACCESS_KEY,
   s3SecretKey: process.env.S3_SECRET_KEY,
   s3Region: process.env.S3_REGION,
+  supabaseUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+  supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
   nominatimEnabled: bool(process.env.NOMINATIM_ENABLED, true),
   dbLogging: bool(process.env.DB_LOGGING, false),
   rateLimitWindow: int(process.env.RATE_LIMIT_WINDOW, 60000),

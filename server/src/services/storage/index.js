@@ -35,6 +35,10 @@ export const storageService = {
       const { putObject } = await import('./drivers/s3.driver.js');
       return putObject({ buffer, filename, mime });
     }
+    if (env.storageDriver === 'supabase') {
+      const { putObject } = await import('./drivers/supabase.driver.js');
+      return putObject({ buffer, filename, mime });
+    }
     // local driver
     const dir = join(UPLOAD_DIR, new Date().toISOString().slice(0, 10));
     mkdirSync(dir, { recursive: true });
