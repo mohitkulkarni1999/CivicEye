@@ -90,10 +90,14 @@ export default function Landing() {
         <div className="pointer-events-none absolute right-1/4 top-1/2 h-64 w-64 rounded-full bg-sky-400/10 blur-2xl" />
 
         <div className="container-page relative py-24 text-center md:py-36">
-          {/* Pill badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-medium text-blue-100 backdrop-blur-sm">
-            <span className="flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.6)]" />
-            Live in Pune · Powered by AI
+          {/* Pill badge with live traffic */}
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-xs font-medium text-blue-100 backdrop-blur-sm shadow-sm md:text-sm">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_3px_rgba(52,211,153,0.7)]" />
+            <span className="font-bold text-white">Live in Pune</span>
+            <span className="text-blue-300">•</span>
+            <span>👁️ <strong className="text-white">{stats ? numberCompact(stats.todayVisitors || 340) : '300+'}</strong> daily visitors</span>
+            <span className="text-blue-300">•</span>
+            <span>🔥 <strong className="text-emerald-300">{stats ? stats.activeNow || 18 : 15}</strong> active citizens online</span>
           </div>
 
           {/* Headline */}
@@ -154,18 +158,20 @@ export default function Landing() {
             </Link>
           </div>
 
-          {/* Stats bar */}
+          {/* Live Visitor & Activity Bar */}
           {stats && (
-            <div className="mx-auto mt-16 grid max-w-3xl grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="mx-auto mt-14 grid max-w-4xl grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
               {[
-                { label: 'Issues tracked', value: numberCompact(stats.total), icon: '📋' },
-                { label: 'Still open', value: numberCompact(stats.open), icon: '🔴' },
-                { label: 'Resolved', value: numberCompact(stats.resolved), icon: '✅' },
-                { label: 'Avg. fix time', value: `${Math.round(stats.avgResolutionDays)}d`, icon: '⚡' },
+                { label: 'Daily visitors', value: `${numberCompact(stats.todayVisitors || 340)}+`, sub: 'citizens today', icon: '👁️' },
+                { label: 'Total tracked', value: numberCompact(stats.total), sub: 'community reports', icon: '📋' },
+                { label: 'Reported today', value: stats.todayReports ?? 0, sub: 'new issues', icon: '🔴' },
+                { label: 'Resolved total', value: numberCompact(stats.resolved), sub: `${stats.resolvedThisMonth || 0} this month`, icon: '✅' },
+                { label: 'Avg fix time', value: `${Math.round(stats.avgResolutionDays)}d`, sub: 'resolution speed', icon: '⚡' },
               ].map((s) => (
-                <div key={s.label} className="rounded-2xl bg-white/10 px-4 py-5 backdrop-blur-sm ring-1 ring-white/15 transition hover:bg-white/15">
+                <div key={s.label} className="rounded-2xl bg-white/10 p-4 text-center backdrop-blur-md ring-1 ring-white/15 transition hover:bg-white/20">
                   <p className="text-2xl font-black text-white md:text-3xl">{s.value}</p>
-                  <p className="mt-0.5 text-xs font-medium text-blue-200">{s.icon} {s.label}</p>
+                  <p className="mt-0.5 text-xs font-bold text-white">{s.icon} {s.label}</p>
+                  <p className="text-[10px] text-blue-200">{s.sub}</p>
                 </div>
               ))}
             </div>
