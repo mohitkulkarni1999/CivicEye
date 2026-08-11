@@ -146,6 +146,8 @@ export const listIssues = asyncHandler(async (req, res) => {
   if (f.status) {
     if (f.status === 'open') {
       add(`i.status NOT IN ('RESOLVED','VERIFIED_RESOLVED','REJECTED')`);
+    } else if (f.status === 'resolved') {
+      add(`i.status IN ('RESOLVED','VERIFIED_RESOLVED')`);
     } else {
       add(`i.status = $${params.length + 1}`);
       params.push(f.status);
@@ -181,6 +183,7 @@ export const listIssues = asyncHandler(async (req, res) => {
     oldest: 'i.created_at ASC',
     priority: 'i.priority_score DESC',
     confirmations: '(SELECT COUNT(*) FROM issue_confirmations x WHERE x.issue_id = i.id) DESC',
+    resolved: 'COALESCE(i.resolved_at, i.created_at) DESC',
   }[f.sort || 'newest'];
 
   const countRes = await pool.query(

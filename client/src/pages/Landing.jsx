@@ -4,13 +4,16 @@ import { http } from '../lib/api.js';
 import { numberCompact, timeAgo } from '../lib/format.js';
 import { CATEGORY_ICONS } from '../lib/constants.js';
 import IssueCard from '../components/IssueCard.jsx';
-import { StatusBadge } from '../components/Badges.jsx';
-import { ArrowRightIcon, CameraIcon, BotIcon, BuildingIcon, CheckIcon, MapIcon, MapPinIcon } from '../components/icons.jsx';
+import { useAuth } from '../lib/auth.jsx';
+import { ArrowRightIcon, CameraIcon, BotIcon, BuildingIcon, CheckIcon, MapIcon, MapPinIcon, SparklesIcon } from '../components/icons.jsx';
 
 export default function Landing() {
+  const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [categories, setCategories] = useState([]);
   const [recent, setRecent] = useState([]);
+  const [resolved, setResolved] = useState([]);
+  const [myResolved, setMyResolved] = useState([]);
   const [q, setQ] = useState('');
   const navigate = useNavigate();
 
@@ -18,7 +21,19 @@ export default function Landing() {
     http.get('/api/city/stats').then((d) => setStats(d.stats)).catch(() => {});
     http.get('/api/categories').then((d) => setCategories(d.categories || [])).catch(() => {});
     http.get('/api/issues', { sort: 'priority', limit: 6 }).then((d) => setRecent(d.issues || [])).catch(() => {});
+    http.get('/api/issues', { status: 'resolved', sort: 'resolved', limit: 6 }).then((d) => setResolved(d.issues || [])).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setMyResolved([]);
+      return;
+    }
+    http.get('/api/issues/my').then((d) => {
+      const myRes = (d.issues || []).filter((i) => ['RESOLVED', 'VERIFIED_RESOLVED'].includes(i.status));
+      setMyResolved(myRes);
+    }).catch(() => {});
+  }, [user]);
 
   const onSearch = (e) => {
     e.preventDefault();
@@ -161,16 +176,74 @@ export default function Landing() {
       {/* RECENTLY RESOLVED */}
       <section className="bg-ink-100/60 py-16">
         <div className="container-page">
-          <h2 className="flex items-center gap-2 text-2xl font-bold text-ink-900 md:text-3xl">
-            <CheckIcon size={26} className="text-emerald-500" /> Recently resolved
-          </h2>
-          <p className="mt-1 text-ink-500">Recent fixes confirmed by the community.</p>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {recent.filter((i) => ['RESOLVED', 'VERIFIED_RESOLVED'].includes(i.status)).slice(0, 3).map((i) => (
-              <IssueCard key={i.id} issue={i} />
-            ))}
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="flex items-center gap-2 text-2xl font-bold text-ink-900 md:text-3xl">
+                <CheckIcon size={26} className="text-emerald-500" /> Recently resolved
+              </h2>
+              <p className="mt-1 text-ink-500">Recent fixes confirmed by the community, ordered by latest resolution.</p>
+            </div>
+            <Link to="/explore?status=resolved" className="text-sm font-semibold text-brand-600 hover:underline">
+              View all resolved →
+            </Link>
           </div>
-          {!recent.some((i) => ['RESOLVED', 'VERIFIED_RESOLVED'].includes(i.status)) && (
+
+          {/* User's Own Resolved Issues Highlight Banner */}
+          {user && myResolved.length > 0 && (
+            <div className="mt-6 rounded-2xl border-2 border-emerald-500 bg-emerald-50 p-5 shadow-sm">
+              <div className="flex items-center gap-2 text-emerald-800 font-bold text-base">
+                <SparklesIcon className="text-emerald-600 h-5 w-5" />
+                Your Reported Issues have been Resolved! 🎉
+              </div>
+              <p className="mt-1 text-xs text-emerald-700">
+                Great job citizen! Here are your reports that local departments have successfully fixed:
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {myResolved.slice(0, 3).map((i) => (
+                  <div key={i.id} className="relative ring-2 ring-emerald-500 rounded-2xl overflow-hidden bg-white shadow-md">
+                    <span className="absolute top-2 left-2 z-10 rounded-full bg-emerald-600 px-2.5 py-0.5 text-[11px] font-bold text-white shadow">
+                      YOUR REPORT FIXED!
+                    </span>
+                    <IssueCard issue={i} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Guest Accountability Callout Banner */}
+          {!user && (
+            <div className="mt-6 rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 via-white to-brand-50 p-6 text-center shadow-sm md:flex md:items-center md:justify-between md:text-left">
+              <div>
+                <h3 className="text-lg font-bold text-ink-900">Spotted a civic problem in your area?</h3>
+                <p className="mt-1 text-sm text-ink-600">
+                  Upload your issue here to hold local government accountable! Track your issue step-by-step from report to repair.
+                </p>
+              </div>
+              <div className="mt-4 flex shrink-0 items-center justify-center gap-3 md:mt-0">
+                <Link to="/report" className="btn-primary">
+                  Report an issue <ArrowRightIcon size={16} />
+                </Link>
+                <Link to="/citizen/login" className="btn-outline">
+                  Sign in to track
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* All Resolved Issues Grid */}
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {(user && myResolved.length > 0
+              ? resolved.filter((i) => !myResolved.some((m) => m.id === i.id))
+              : resolved
+            )
+              .slice(0, 6)
+              .map((i) => (
+                <IssueCard key={i.id} issue={i} />
+              ))}
+          </div>
+
+          {resolved.length === 0 && myResolved.length === 0 && (
             <p className="mt-6 rounded-xl bg-brand-50 p-4 text-center text-sm text-brand-800">
               Head to the <Link to="/dashboard" className="font-semibold underline">city dashboard</Link> to see resolution trends.
             </p>
