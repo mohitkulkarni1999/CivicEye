@@ -5,7 +5,7 @@ import { logger } from '../utils/logger.js';
 const { Pool } = pg;
 
 export const pool = new Pool({
-  connectionString: env.databaseUrl,
+  connectionString: env.databaseUrl.replace('sslmode=require', 'sslmode=no-verify'),
   ssl: env.databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
