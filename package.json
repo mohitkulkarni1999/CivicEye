@@ -1,0 +1,22 @@
+{
+  "name": "civiceye",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-powered civic issue reporting and accountability platform",
+  "scripts": {
+    "setup": "npm run setup:server && npm run setup:client",
+    "setup:server": "npm --prefix server install",
+    "setup:client": "npm --prefix client install",
+    "db:migrate": "npm --prefix server run db:migrate",
+    "db:seed": "npm --prefix server run db:seed",
+    "test": "npm --prefix server run test",
+    "test:api": "npm --prefix server run test",
+    "dev": "concurrently -n server,client -c blue,green \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "start": "npm --prefix server run start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
