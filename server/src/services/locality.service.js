@@ -21,6 +21,21 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+// Find locality by matching area or name text
+export async function findLocalityByAreaName(areaName) {
+  if (!areaName || typeof areaName !== 'string') return null;
+  const clean = areaName.trim().toLowerCase();
+  if (clean.length < 2) return null;
+  const { rows } = await pool.query(
+    `SELECT * FROM locations
+      WHERE is_active = true AND slug NOT LIKE '@%'
+        AND (LOWER(name) LIKE $1 OR LOWER(area) LIKE $1 OR LOWER(city) LIKE $1)
+      LIMIT 1`,
+    [`%${clean}%`],
+  );
+  return rows[0] || null;
+}
+
 // Find the locality whose centre is nearest to (lat,lng) and within its radius.
 // Reverse-geocode cache rows (slug "@lat,lng") are excluded — they are not real
 // administrative localities.
