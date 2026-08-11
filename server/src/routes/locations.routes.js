@@ -83,7 +83,7 @@ router.get(
   }),
 );
 
-// GET /api/locations/lookup?lat=..&lng=.. — find the locality containing a point
+// GET /api/locations/lookup?lat=..&lng=.. — find the locality containing a point (or nearest)
 router.get(
   '/lookup',
   asyncHandler(async (req, res) => {
@@ -92,7 +92,7 @@ router.get(
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       return res.status(400).json({ error: 'lat and lng query params are required' });
     }
-    const loc = await findLocality(lat, lng);
+    const loc = (await findLocality(lat, lng)) || (await findNearestLocality(lat, lng));
     if (!loc) return res.json({ match: null });
     const { officer_phone, ...match } = loc;
     res.json({ match: { ...match, type_label: LOCALITY_TYPE_LABELS[loc.type] || loc.type } });

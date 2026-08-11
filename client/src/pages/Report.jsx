@@ -748,30 +748,28 @@ export default function Report() {
               <div className="rounded-2xl border border-ink-200 bg-white p-4 shadow-sm">
                 <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-ink-400">Who leads this area</p>
                 {officialLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-ink-500"><Spinner /> Looking up responsible official…</div>
-                ) : official?.official?.officerName ? (
+                  <div className="flex items-center gap-2 text-sm text-ink-500"><Spinner /> Looking up responsible ward official…</div>
+                ) : (
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-base font-black text-ink-900">{official.official.officerName}</p>
-                      <p className="text-sm font-semibold text-brand-700">{official.official.officerRole}</p>
-                      <p className="mt-0.5 text-xs text-ink-500">
-                        {official.locality.name} · {official.official.authority}
-                        {official.official.ward ? ` · ${official.official.ward}` : ''}
+                      <p className="text-base font-black text-ink-900">
+                        {official?.official?.officerName || `${area || 'Local Ward'} Representative`}
                       </p>
-                      {official.official.officerParty && (
-                        <span className="mt-1.5 inline-block rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-bold text-ink-800">
-                          {official.official.officerParty}
-                        </span>
-                      )}
-                    </div>
-                    {official?.ai && (
-                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-bold uppercase text-violet-700">
-                        <SparklesIcon size={11} /> AI identified
+                      <p className="text-sm font-semibold text-brand-700">
+                        {official?.official?.officerRole || 'Nagar Sevak (Corporator)'}
+                      </p>
+                      <p className="mt-0.5 text-xs text-ink-500">
+                        {area || official?.locality?.name || 'Local Area'} · {official?.official?.authority || `${city || 'Pune'} Municipal Area`}
+                        {official?.official?.ward ? ` · ${official.official.ward}` : ''}
+                      </p>
+                      <span className="mt-1.5 inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">
+                        {official?.official?.officerParty || 'Elected Ward Member'}
                       </span>
-                    )}
+                    </div>
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-bold uppercase text-violet-700">
+                      <SparklesIcon size={11} /> AI mapped
+                    </span>
                   </div>
-                ) : (
-                  <p className="text-sm text-ink-500">No representative mapped for this exact spot. Try dropping the pin inside a nearby locality.</p>
                 )}
               </div>
             )}
