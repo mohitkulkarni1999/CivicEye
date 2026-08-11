@@ -30,7 +30,7 @@ export default function Landing() {
   useEffect(() => {
     http.get('/api/city/stats').then((d) => setStats(d.stats)).catch(() => {});
     http.get('/api/categories').then((d) => setCategories(d.categories || [])).catch(() => {});
-    http.get('/api/issues', { sort: 'priority', limit: 6 }).then((d) => setRecent(d.issues || [])).catch(() => {});
+    http.get('/api/issues', { sort: 'priority', limit: 6, status: 'open' }).then((d) => setRecent(d.issues || [])).catch(() => {});
     http.get('/api/issues', { status: 'resolved', sort: 'resolved', limit: 6 }).then((d) => setResolved(d.issues || [])).catch(() => {});
   }, []);
 
