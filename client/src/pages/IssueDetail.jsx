@@ -481,18 +481,14 @@ export default function IssueDetail() {
                   </div>
                 </div>
 
-                {/* Path 3: Who to contact / escalation */}
+                {/* Path 3: Department routing & Priority */}
                 <div className="flex items-start gap-2.5 rounded-xl bg-white p-3 ring-1 ring-violet-100">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-purple-100 text-xs">📞</span>
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-purple-100 text-xs">🏢</span>
                   <div>
-                    <p className="font-bold text-ink-900">Option 3: Escalation & Contact Info</p>
+                    <p className="font-bold text-ink-900">Option 3: Department & Area Info</p>
                     <p className="mt-0.5 text-ink-600 leading-relaxed">
-                      Responsible department: <strong className="text-ink-900">{issue.department?.name || 'Local Operations'}</strong> ({issue.category?.name}).
-                      {issue.officer_name ? (
-                        <> Area representative: <strong className="text-ink-900">{issue.officer_name}</strong> ({issue.officer_role}).</>
-                      ) : (
-                        <> Mapped to locality: <strong className="text-ink-900">{issue.area || issue.city || 'Pune'}</strong>.</>
-                      )}
+                      Assigned department: <strong className="text-ink-900">{issue.department?.name || 'Local Operations'}</strong> ({issue.category?.name}).
+                      Mapped to ward/area: <strong className="text-ink-900">{issue.area || issue.city || 'Pune'}</strong>.
                       {issue.severity === 'CRITICAL' && (
                         <span className="ml-1 font-bold text-red-600">⚠️ High priority issue — flagged for urgent field team dispatch.</span>
                       )}
