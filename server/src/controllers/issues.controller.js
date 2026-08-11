@@ -201,8 +201,14 @@ export const listIssues = asyncHandler(async (req, res) => {
             (SELECT COUNT(*) FROM issue_confirmations x WHERE x.issue_id = i.id)::int AS confirmations,
             (SELECT COUNT(*) FROM issue_votes v WHERE v.issue_id = i.id AND v.direction = 'up')::int AS upvotes,
             (SELECT COUNT(*) FROM issue_comments co WHERE co.issue_id = i.id AND co.is_hidden = false)::int AS comments,
-            (SELECT x.url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary) AS cover_url,
-            (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary) AS cover_thumb
+            COALESCE(
+              (SELECT x.url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary LIMIT 1),
+              (SELECT x.url FROM issue_images x WHERE x.issue_id = i.id ORDER BY x.created_at ASC LIMIT 1)
+            ) AS cover_url,
+            COALESCE(
+              (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary LIMIT 1),
+              (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id ORDER BY x.created_at ASC LIMIT 1)
+            ) AS cover_thumb
        FROM issues i
        JOIN categories c ON c.id = i.category_id
        LEFT JOIN departments d ON d.id = i.department_id
@@ -643,9 +649,23 @@ export const reportIncorrect = asyncHandler(async (req, res) => {
 export const myIssues = asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT i.id, i.public_id, i.title, i.status, i.severity, i.priority_score,
-            i.created_at, i.is_demo, c.name AS category_name,
-            (SELECT COUNT(*) FROM issue_confirmations x WHERE x.issue_id = i.id)::int AS confirmations
-       FROM issues i JOIN categories c ON c.id = i.category_id
+            i.lat, i.lng, i.area, i.city, i.address, i.is_demo, i.created_at, i.reported_at,
+            c.slug AS category_slug, c.name AS category_name, c.color AS category_color,
+            d.name AS department_name,
+            (SELECT COUNT(*) FROM issue_confirmations x WHERE x.issue_id = i.id)::int AS confirmations,
+            (SELECT COUNT(*) FROM issue_votes v WHERE v.issue_id = i.id AND v.direction = 'up')::int AS upvotes,
+            (SELECT COUNT(*) FROM issue_comments co WHERE co.issue_id = i.id AND co.is_hidden = false)::int AS comments,
+            COALESCE(
+              (SELECT x.url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary LIMIT 1),
+              (SELECT x.url FROM issue_images x WHERE x.issue_id = i.id ORDER BY x.created_at ASC LIMIT 1)
+            ) AS cover_url,
+            COALESCE(
+              (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary LIMIT 1),
+              (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id ORDER BY x.created_at ASC LIMIT 1)
+            ) AS cover_thumb
+       FROM issues i
+       JOIN categories c ON c.id = i.category_id
+       LEFT JOIN departments d ON d.id = i.department_id
       WHERE i.reporter_id = $1 ORDER BY i.created_at DESC`,
     [req.user.id],
   );
@@ -655,10 +675,24 @@ export const myIssues = asyncHandler(async (req, res) => {
 export const myConfirmedIssues = asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT i.id, i.public_id, i.title, i.status, i.severity, i.priority_score,
-            i.created_at, i.is_demo, c.name AS category_name
+            i.lat, i.lng, i.area, i.city, i.address, i.is_demo, i.created_at, i.reported_at,
+            c.slug AS category_slug, c.name AS category_name, c.color AS category_color,
+            d.name AS department_name,
+            (SELECT COUNT(*) FROM issue_confirmations x WHERE x.issue_id = i.id)::int AS confirmations,
+            (SELECT COUNT(*) FROM issue_votes v WHERE v.issue_id = i.id AND v.direction = 'up')::int AS upvotes,
+            (SELECT COUNT(*) FROM issue_comments co WHERE co.issue_id = i.id AND co.is_hidden = false)::int AS comments,
+            COALESCE(
+              (SELECT x.url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary LIMIT 1),
+              (SELECT x.url FROM issue_images x WHERE x.issue_id = i.id ORDER BY x.created_at ASC LIMIT 1)
+            ) AS cover_url,
+            COALESCE(
+              (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id AND x.is_primary LIMIT 1),
+              (SELECT x.thumb_url FROM issue_images x WHERE x.issue_id = i.id ORDER BY x.created_at ASC LIMIT 1)
+            ) AS cover_thumb
        FROM issue_confirmations cf
        JOIN issues i ON i.id = cf.issue_id
        JOIN categories c ON c.id = i.category_id
+       LEFT JOIN departments d ON d.id = i.department_id
       WHERE cf.user_id = $1 ORDER BY cf.created_at DESC`,
     [req.user.id],
   );
