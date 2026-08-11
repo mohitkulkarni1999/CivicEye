@@ -371,30 +371,19 @@ function svgFor(category, color, variant) {
 }
 
 async function makeDemoImages() {
-  mkdirSync(UPLOAD_DIR, { recursive: true });
   const generated = [];
   for (const cat of CATEGORIES) {
     for (let v = 0; v < 2; v++) {
       const svg = svgFor(cat.slug, cat.color, v);
-      const buffer = await sharp(Buffer.from(svg)).jpeg({ quality: 80 }).toBuffer();
-      const thumb = await sharp(Buffer.from(svg)).resize(300).jpeg({ quality: 70 }).toBuffer();
-      const fname = `demo-${cat.slug}-${v}`;
-      writeFileSync(join(UPLOAD_DIR, `${fname}.jpg`), buffer);
-      writeFileSync(join(UPLOAD_DIR, `${fname}_thumb.jpg`), thumb);
-      const gray = await sharp(buffer).grayscale().raw().toBuffer({ resolveWithObject: true });
-      const hash = computeDHash(
-        toGray8({ data: gray.data, width: gray.info.width, height: gray.info.height }),
-        gray.info.width,
-        gray.info.height,
-      );
+      const dataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
       generated.push({
-        url: `/uploads/${fname}.jpg`,
-        thumb_url: `/uploads/${fname}_thumb.jpg`,
-        mime: 'image/jpeg',
-        size_bytes: buffer.length,
+        url: dataUri,
+        thumb_url: dataUri,
+        mime: 'image/svg+xml',
+        size_bytes: svg.length,
         width: 800,
         height: 600,
-        hash: hash.toString(16),
+        hash: '0000000000000000',
         slug: cat.slug,
       });
     }
