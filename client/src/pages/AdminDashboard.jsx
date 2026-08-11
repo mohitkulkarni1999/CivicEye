@@ -19,16 +19,39 @@ const TABS = [
 export default function AdminDashboard() {
   const [tab, setTab] = useState('overview');
   return (
-    <div className="container-page max-w-6xl py-8">
-      <h1 className="text-2xl font-bold text-ink-900">Admin console</h1>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`btn ${tab === t.id ? 'btn-primary' : 'btn-outline'}`}>
-            {t.label}
-          </button>
-        ))}
+    <div className="min-h-screen" style={{ background: 'linear-gradient(180deg,#f0f4ff 0%,#f8fafc 100%)' }}>
+
+      {/* ── Header ── */}
+      <div style={{ background: 'linear-gradient(135deg,#1e3a5f 0%,#1a56db 100%)' }} className="py-8 text-white">
+        <div className="container-page max-w-6xl">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/20 text-xl">⚙️</span>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight">Admin Console</h1>
+              <p className="text-sm text-blue-200">System management, officers, categories & moderation</p>
+            </div>
+          </div>
+
+          {/* Navigation Tabs */}
+          <div className="mt-6 flex flex-wrap gap-2">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+                  tab === t.id
+                    ? 'bg-white text-blue-900 shadow-md'
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-      <div className="mt-6">
+
+      <div className="container-page max-w-6xl py-8">
         {tab === 'overview' && <Overview />}
         {tab === 'resolved' && <Resolved />}
         {tab === 'officers' && <Officers />}
