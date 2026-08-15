@@ -6,7 +6,7 @@ import MapView from '../components/MapView.jsx';
 import Spinner from '../components/Spinner.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import { formatDateTime, timeAgo, daysOpenLabel } from '../lib/format.js';
-import { statusLabel } from '../lib/constants.js';
+import { statusLabel, ESCALATION_COLORS, X_INTENT_BASE } from '../lib/constants.js';
 import { useAuth } from '../lib/auth.jsx';
 import { useToast } from '../lib/toast.jsx';
 import {
@@ -22,6 +22,8 @@ import {
   CheckIcon,
   AlertIcon,
   SparklesIcon,
+  LinkIcon,
+  SendIcon,
 } from '../components/icons.jsx';
 
 export default function IssueDetail() {
@@ -43,6 +45,7 @@ export default function IssueDetail() {
   const [repairVerification, setRepairVerification] = useState(null);
   const [repairChecking, setRepairChecking] = useState(false);
   const [modWarning, setModWarning] = useState('');
+  const [copiedEsc, setCopiedEsc] = useState(false);
   const modTimer = useRef(null);
   const toast = useToast();
 
@@ -196,6 +199,17 @@ export default function IssueDetail() {
     }
   };
 
+  const copyEscalationText = async (esc) => {
+    try {
+      await navigator.clipboard.writeText(esc.generated_text || '');
+      setCopiedEsc(esc.id);
+      toast.success('Post copied to clipboard');
+      setTimeout(() => setCopiedEsc(false), 2000);
+    } catch {
+      toast.error('Could not copy text');
+    }
+  };
+
   const postComment = async (e) => {
     e.preventDefault();
     if (!isAuthed) return navigate('/citizen/login');
@@ -263,6 +277,8 @@ export default function IssueDetail() {
   };
 
   const resolved = ['RESOLVED', 'VERIFIED_RESOLVED'].includes(issue.status);
+  const reportEsc = issue.escalations?.find((e) => e.post_type === 'report') || issue.escalations?.[0] || null;
+  const wardNoLabel = (issue.ward_no || '').replace(/^ward\s*/i, '');
 
   return (
     <div className="container-page max-w-6xl py-8">
@@ -425,6 +441,45 @@ export default function IssueDetail() {
                   <p className="mt-1 inline-block rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-800">
                     {issue.officer_party}
                   </p>
+                )}
+              </div>
+            )}
+
+            {issue.representative && (
+              <div className="mt-4 rounded-2xl border border-ink-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                    Concerned elected representative
+                  </p>
+                  {issue.representative.x_verified_by_admin && issue.representative.official_x_username ? (
+                    <span className="ml-auto flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                      <CheckIcon size={11} className="text-emerald-600" /> X verified
+                    </span>
+                  ) : (
+                    <span className="ml-auto rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-semibold text-ink-500">
+                      Mapping only
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1.5 text-base font-bold text-ink-900">{issue.representative.name}</p>
+                <p className="text-sm font-medium text-brand-700">{issue.representative.designation}</p>
+                <p className="mt-0.5 text-xs text-ink-600">
+                  {[
+                    issue.representative.constituency,
+                    wardNoLabel ? `Ward ${wardNoLabel}` : null,
+                    issue.area,
+                    issue.city,
+                  ].filter(Boolean).join(' · ') || '—'}
+                </p>
+                {issue.representative.official_x_username && (
+                  <a
+                    href={issue.representative.x_profile_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-ink-800 hover:text-brand-700"
+                  >
+                    <LinkIcon size={14} className="text-brand-600" /> @{issue.representative.official_x_username}
+                  </a>
                 )}
               </div>
             )}
@@ -638,6 +693,89 @@ export default function IssueDetail() {
               ))}
             </ol>
           </div>
+
+          {reportEsc && (
+            <div className="card mt-4 p-5">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <h3 className="flex items-center gap-2 font-semibold text-ink-900">
+                  <SendIcon size={16} className="text-brand-600" /> X escalation
+                </h3>
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                    ESCALATION_COLORS[reportEsc.status]?.bg || 'bg-ink-100'
+                  } ${ESCALATION_COLORS[reportEsc.status]?.text || 'text-ink-600'}`}
+                >
+                  {statusLabel(reportEsc.status)}
+                </span>
+              </div>
+
+              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold text-ink-400">
+                {['PENDING', 'READY', 'APPROVED', 'PUBLISHED'].map((s, i) => {
+                  const idx = ['PENDING', 'READY', 'APPROVED', 'PUBLISHED'].indexOf(reportEsc.status);
+                  const reached = i <= idx || reportEsc.status === 'PUBLISHED';
+                  return (
+                    <span key={s} className="flex items-center gap-1.5">
+                      <span className={`h-2 w-2 rounded-full ${reached ? (ESCALATION_COLORS[s]?.dot || 'bg-brand-500') : 'bg-ink-200'}`} />
+                      <span>{s[0]}</span>
+                      {i < 3 && <span className="w-2 border-t-2 border-ink-100" />}
+                    </span>
+                  );
+                })}
+              </div>
+
+              {reportEsc.status === 'REJECTED' && (
+                <p className="mb-3 rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-600">
+                  This escalation was not approved{reportEsc.failure_reason ? ` — ${reportEsc.failure_reason}` : ''}.
+                </p>
+              )}
+
+              {reportEsc.generated_text && (
+                <div className="mb-3 rounded-xl border border-ink-100 bg-ink-50 p-3">
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-700">{reportEsc.generated_text}</p>
+                  <p className="mt-2 text-right text-[11px] text-ink-400">{reportEsc.generated_text.length}/280</p>
+                </div>
+              )}
+
+              {reportEsc.status === 'APPROVED' && (
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href={`${X_INTENT_BASE}?text=${encodeURIComponent(reportEsc.generated_text || '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-primary text-sm"
+                  >
+                    <SendIcon size={14} /> Post on X
+                  </a>
+                  <button type="button" onClick={() => copyEscalationText(reportEsc)} className="btn-outline text-sm">
+                    {copiedEsc === reportEsc.id ? 'Copied ✓' : 'Copy post'}
+                  </button>
+                </div>
+              )}
+
+              {reportEsc.status === 'READY' && (
+                <p className="text-xs text-ink-500">Waiting for approval by our team before it can be shared.</p>
+              )}
+
+              {reportEsc.status === 'PENDING' && (
+                <p className="text-xs text-ink-500">Post is being prepared. Check back soon.</p>
+              )}
+
+              {reportEsc.status === 'PUBLISHED' && (
+                <a
+                  href={reportEsc.external_post_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-primary text-sm"
+                >
+                  <LinkIcon size={14} /> View X post
+                </a>
+              )}
+
+              {reportEsc.status === 'FAILED' && (
+                <p className="text-xs text-red-600">Post generation failed. Our team has been notified.</p>
+              )}
+            </div>
+          )}
 
           {issue.aiAnalyses?.length > 0 && (
             <div className="card mt-4 p-5">

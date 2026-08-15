@@ -18,6 +18,7 @@ import officerRoutes from './routes/officer.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
 import locationsRoutes from './routes/locations.routes.js';
+import representativeRoutes from './routes/representative.routes.js';
 
 export const app = express();
 
@@ -53,6 +54,7 @@ app.use('/api/officer', officerRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/locations', locationsRoutes);
+app.use('/api/representatives', representativeRoutes);
 
 // Static uploads (local storage driver)
 app.use(PUBLIC_UPLOAD_BASE, express.static(UPLOAD_DIR, { maxAge: '7d' }));

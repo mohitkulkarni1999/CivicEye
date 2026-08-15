@@ -59,3 +59,22 @@ export const http = {
   del: (path) => api(path, { method: 'DELETE' }),
   upload: (path, formData) => api(path, { method: 'POST', formData }),
 };
+
+export const escalationApi = {
+  list: (params) => http.get('/api/admin/escalations', params),
+  approve: (id) => http.post(`/api/admin/escalations/${id}/approve`),
+  reject: (id, reason) => http.post(`/api/admin/escalations/${id}/reject`, { reason }),
+  publish: (id, postUrl) => http.post(`/api/admin/escalations/${id}/publish`, { postUrl }),
+  updateText: (id, text) => http.post(`/api/admin/escalations/${id}/text`, { text }),
+  retry: (id) => http.post(`/api/admin/escalations/${id}/retry`),
+};
+
+export const representativeApi = {
+  resolve: (lat, lng) => http.get('/api/representatives/resolve', { lat, lng }),
+  list: (params) => http.get('/api/admin/representatives', params),
+  create: (body) => http.post('/api/admin/representatives', body),
+  update: (id, body) => http.patch(`/api/admin/representatives/${id}`, body),
+  verifyX: (id, verified) => http.post(`/api/admin/representatives/${id}/verify-x`, { verified }),
+  wards: () => http.get('/api/admin/wards'),
+  linkWard: (wardId, representativeId) => http.patch(`/api/admin/wards/${wardId}`, { representativeId }),
+};

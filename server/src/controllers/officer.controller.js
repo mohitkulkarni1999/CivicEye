@@ -6,6 +6,7 @@ import { transitionStatus } from '../services/issue-state.service.js';
 import { aiService } from '../services/ai/index.js';
 import { fetchUploadedImage } from '../middleware/upload.js';
 import { notifyReporter, notifyFollowers, notifyEngagedUsers } from '../services/notification.service.js';
+import { maybeCreateResolutionEscalation } from '../services/escalation.service.js';
 
 const STATUS_SCHEMA = z.object({
   toStatus: z.enum([
@@ -218,6 +219,14 @@ export const changeStatus = asyncHandler(async (req, res) => {
       title: `Issue #${issue.public_id} you supported has been resolved`,
       body: `"${issue.title}" was fixed and is now visible with before/after photos on the issue page.`,
       exceptUserIds: [req.user.id, issue.reporter_id],
+    });
+
+    // Draft a resolution X post when the report was previously escalated.
+    const catRes = await pool.query('SELECT * FROM categories WHERE id = $1', [issue.category_id]);
+    await maybeCreateResolutionEscalation({
+      issue: { ...issue, status: parsed.data.toStatus },
+      category: catRes.rows[0] || null,
+      updatedBy: req.user.name || 'the department',
     });
   }
 

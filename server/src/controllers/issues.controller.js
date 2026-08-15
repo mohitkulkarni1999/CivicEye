@@ -9,6 +9,8 @@ import { DuplicateDetector } from '../services/duplicate.service.js';
 import { findLocality } from '../services/locality.service.js';
 import { transitionStatus, getStatusHistory } from '../services/issue-state.service.js';
 import { notify, notifyFollowers, notifyReporter } from '../services/notification.service.js';
+import { maybeCreateReportEscalation, getEscalationForIssue, pickEscalation } from '../services/escalation.service.js';
+import { getRepresentativeById, pickRepresentative, resolveRepresentativeForPoint } from '../services/representative.service.js';
 import { computeDHash, fetchUploadedImage } from '../middleware/upload.js';
 import { aiService } from '../services/ai/index.js';
 import { logger } from '../utils/logger.js';
@@ -230,7 +232,7 @@ export const getIssue = asyncHandler(async (req, res) => {
     throw ApiError.notFound('Issue not found');
   }
 
-  const [catRes, deptRes, imgRes, hist, confRes, voteRes, commentRes, evidenceRes, aiRes, reporterRes] =
+  const [catRes, deptRes, imgRes, hist, confRes, voteRes, commentRes, evidenceRes, aiRes, reporterRes, repRes, escRes] =
     await Promise.all([
       pool.query('SELECT * FROM categories WHERE id = $1', [issue.category_id]),
       pool.query('SELECT * FROM departments WHERE id = $1', [issue.department_id]),
@@ -276,6 +278,17 @@ export const getIssue = asyncHandler(async (req, res) => {
         `SELECT id, name, email FROM users WHERE id = $1`,
         [issue.reporter_id],
       ),
+      issue.representative_id
+        ? pool.query('SELECT * FROM representatives WHERE id = $1', [issue.representative_id])
+        : Promise.resolve({ rows: [] }),
+      pool.query(
+        `SELECT e.*, r.official_x_username AS representative_x_username,
+                r.name AS representative_name, r.x_verified_by_admin AS representative_x_verified
+           FROM issue_escalations e
+           LEFT JOIN representatives r ON r.id = e.representative_id
+          WHERE e.issue_id = $1 ORDER BY e.created_at ASC`,
+        [issue.id],
+      ),
     ]);
 
   const comments = commentRes.rows.map((c) => ({
@@ -316,6 +329,8 @@ export const getIssue = asyncHandler(async (req, res) => {
       comments,
       evidence: evidenceRes.rows,
       aiAnalyses: aiRes.rows,
+      representative: repRes.rows[0] ? pickRepresentative(repRes.rows[0]) : null,
+      escalations: escRes.rows.map((e) => pickEscalation(e)),
       daysOpen,
       confirmedByMe,
       upvotedByMe,
@@ -355,14 +370,18 @@ export const createIssue = asyncHandler(async (req, res) => {
   const locality = await findLocality(b.lat, b.lng);
   const localityId = locality?.id ?? b.localityId ?? null;
 
+  // Elected representative for this point (deterministic, never AI).
+  const resolved = await resolveRepresentativeForPoint(b.lat, b.lng);
+
   const issue = await withTransaction(async (client) => {
     const { rows } = await client.query(
       `INSERT INTO issues
         (reporter_id, is_anonymous, category_id, title, description, status, severity,
          lat, lng, address, area, city, landmark, confidence, is_demo,
-         locality_id, locality_type, ward_no, officer_name, officer_role, officer_phone, officer_party)
+         locality_id, locality_type, ward_no, officer_name, officer_role, officer_phone, officer_party,
+         representative_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, false,
-               $15, $16, $17, $18, $19, $20, $21)
+               $15, $16, $17, $18, $19, $20, $21, $22)
        RETURNING *`,
       [
         userId,
@@ -386,6 +405,7 @@ export const createIssue = asyncHandler(async (req, res) => {
         locality?.officer_role ?? '',
         locality?.officer_phone ?? '',
         locality?.officer_party ?? '',
+        resolved.matched ? resolved.representative.id : null,
       ],
     );
     const created = rows[0];
@@ -404,6 +424,13 @@ export const createIssue = asyncHandler(async (req, res) => {
 
   await attachImages(issue.id, b.imageIds, userId);
   await computePriorityScore(issue.id);
+
+  // Representative detection + X escalation draft (non-fatal by design).
+  const esc = await maybeCreateReportEscalation({ issue, category: catRes.rows[0], resolved });
+  const representative = esc?.representative_id
+    ? (await getRepresentativeById(esc.representative_id).then(pickRepresentative))
+    : null;
+  const escalation = esc ? pickEscalation(esc) : null;
 
   const { rows: imgHashes } = await pool.query(
     `SELECT perceptual_hash FROM issue_images WHERE issue_id = $1 AND perceptual_hash IS NOT NULL`,
@@ -432,7 +459,7 @@ export const createIssue = asyncHandler(async (req, res) => {
     context: `Issue #${issue.public_id} description`,
   });
 
-  res.status(201).json({ issue, duplicateSuggestions: dupCheck.matches });
+  res.status(201).json({ issue, duplicateSuggestions: dupCheck.matches, escalation, representative });
 });
 
 export const confirmIssue = asyncHandler(async (req, res) => {

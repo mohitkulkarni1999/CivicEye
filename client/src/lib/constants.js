@@ -43,6 +43,24 @@ export const SEVERITY_COLORS = {
   CRITICAL: { bg: 'bg-red-100', text: 'text-red-800', dot: 'bg-red-600' },
 };
 
+export const ESCALATION_STATUSES = ['PENDING', 'READY', 'APPROVED', 'PUBLISHED', 'REJECTED', 'FAILED'];
+
+export const ESCALATION_COLORS = {
+  PENDING: { bg: 'bg-slate-100', text: 'text-slate-700', dot: 'bg-slate-400' },
+  READY: { bg: 'bg-amber-100', text: 'text-amber-800', dot: 'bg-amber-500' },
+  APPROVED: { bg: 'bg-sky-100', text: 'text-sky-700', dot: 'bg-sky-500' },
+  PUBLISHED: { bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  REJECTED: { bg: 'bg-gray-200', text: 'text-gray-600', dot: 'bg-gray-400' },
+  FAILED: { bg: 'bg-red-100', text: 'text-red-700', dot: 'bg-red-500' },
+};
+
+export const POST_TYPES = {
+  report: { label: 'Report', sub: 'Issue reported' },
+  resolution: { label: 'Resolution', sub: 'Issue resolved' },
+};
+
+export const X_INTENT_BASE = 'https://x.com/intent/tweet';
+
 export const STATUS_COLORS = {
   REPORTED: { bg: 'bg-slate-100', text: 'text-slate-700' },
   AI_REVIEW: { bg: 'bg-indigo-100', text: 'text-indigo-700' },

@@ -41,3 +41,13 @@ export const uploadLimiter = rateLimit({
     throw ApiError.tooMany('Upload limit reached. Try again in a moment.');
   },
 });
+
+export const escalateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, _res) => {
+    throw ApiError.tooMany('Escalation action rate limit reached. Try again in a moment.');
+  },
+});

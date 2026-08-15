@@ -2,7 +2,25 @@ import { Router } from 'express';
 import multer from 'multer';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { escalateLimiter } from '../middleware/rateLimit.js';
 import { adminController } from '../controllers/admin.controller.js';
+import {
+  adminListRepresentatives,
+  adminCreateRepresentative,
+  adminUpdateRepresentative,
+  adminVerifyRepresentativeX,
+  adminListWards,
+  adminCreateWard,
+  adminUpdateWard,
+} from '../controllers/representative.controller.js';
+import {
+  listEscalationsAdmin,
+  approveEscalationAction,
+  rejectEscalationAction,
+  publishEscalationAction,
+  retryEscalationAction,
+  updateEscalationTextAction,
+} from '../controllers/escalation.controller.js';
 
 const router = Router();
 
@@ -43,5 +61,24 @@ router.patch('/ai-config', asyncHandler(adminController.updateAiConfig));
 
 router.get('/locations', asyncHandler(adminController.listLocations));
 router.post('/locations', asyncHandler(adminController.manageLocation));
+
+// Elected representatives
+router.get('/representatives', asyncHandler(adminListRepresentatives));
+router.post('/representatives', asyncHandler(adminCreateRepresentative));
+router.patch('/representatives/:id', asyncHandler(adminUpdateRepresentative));
+router.post('/representatives/:id/verify-x', asyncHandler(adminVerifyRepresentativeX));
+
+// Wards
+router.get('/wards', asyncHandler(adminListWards));
+router.post('/wards', asyncHandler(adminCreateWard));
+router.patch('/wards/:id', asyncHandler(adminUpdateWard));
+
+// X escalations
+router.get('/escalations', asyncHandler(listEscalationsAdmin));
+router.post('/escalations/:id/approve', escalateLimiter, asyncHandler(approveEscalationAction));
+router.post('/escalations/:id/reject', escalateLimiter, asyncHandler(rejectEscalationAction));
+router.post('/escalations/:id/publish', escalateLimiter, asyncHandler(publishEscalationAction));
+router.post('/escalations/:id/retry', escalateLimiter, asyncHandler(retryEscalationAction));
+router.post('/escalations/:id/text', escalateLimiter, asyncHandler(updateEscalationTextAction));
 
 export default router;

@@ -110,16 +110,18 @@ export default function Report() {
   const [aiApplied, setAiApplied] = useState(false);
   const [official, setOfficial] = useState(null);
   const [officialLoading, setOfficialLoading] = useState(false);
+  const [electedRep, setElectedRep] = useState(null);
 
   useEffect(() => {
     http.get('/api/categories').then((d) => setCategories(d.categories || [])).catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!picked) { setOfficial(null); return; }
+    if (!picked) { setOfficial(null); setElectedRep(null); return; }
     let cancelled = false;
     setOfficialLoading(true);
     setOfficial(null);
+    setElectedRep(null);
     http.get('/api/locations/lookup', { lat: picked[0], lng: picked[1] })
       .then((d) => {
         if (cancelled) return;
@@ -128,6 +130,9 @@ export default function Report() {
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setOfficialLoading(false); });
+    http.get('/api/representatives/resolve', { lat: picked[0], lng: picked[1] })
+      .then((r) => { if (!cancelled && r.matched) setElectedRep(r); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [picked && picked[0], picked && picked[1]]);
 
@@ -749,6 +754,30 @@ export default function Report() {
                 <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-ink-400">Who leads this area</p>
                 {officialLoading ? (
                   <div className="flex items-center gap-2 text-sm text-ink-500"><Spinner /> Looking up responsible ward official…</div>
+                ) : electedRep?.matched && electedRep.representative ? (
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-black text-ink-900">{electedRep.representative.name}</p>
+                      <p className="text-sm font-semibold text-brand-700">{electedRep.representative.designation}</p>
+                      <p className="mt-0.5 text-xs text-ink-500">
+                        {area || electedRep.locality?.name || 'Local Area'}
+                        {electedRep.ward?.ward_number ? ` · ${electedRep.ward.ward_number}` : ''}
+                        {electedRep.representative.constituency ? ` · ${electedRep.representative.constituency}` : ''}
+                      </p>
+                      {electedRep.representative.official_x_username ? (
+                        <a href={electedRep.representative.x_profile_url} target="_blank" rel="noreferrer" className="mt-1.5 inline-block text-sm font-semibold text-ink-800 hover:text-brand-700">
+                          @{electedRep.representative.official_x_username}
+                        </a>
+                      ) : (
+                        <span className="mt-1.5 inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">
+                          {electedRep.representative.designation || 'Elected Ward Member'}
+                        </span>
+                      )}
+                    </div>
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-700">
+                      <CheckIcon size={11} /> Verified
+                    </span>
+                  </div>
                 ) : (
                   <div className="flex items-start justify-between gap-3">
                     <div>

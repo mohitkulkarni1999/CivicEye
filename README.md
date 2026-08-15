@@ -64,6 +64,49 @@ seeded** — register them from the signup page.
   node src/db/reset-data.js
   ```
 
+- **Wards** are seeded idempotently from the locality data (one ward per
+  `(city, ward_no)`), and demo representatives are seeded **only** when
+  `DEMO_MODE=true` (clearly marked, with no X usernames).
+
+## Elected representative & X escalation
+
+When a report is created, the platform deterministically resolves the current
+elected representative (Nagar Sevak / Corporator) for that location —
+**no AI guessing, no fake handles**:
+
+1. Locality nearest to the report point (within its radius) is found.
+2. That locality is mapped to a **ward** (via `boundary_locality_id`, else
+   `city + ward_no`).
+3. The ward's **current representative** (`is_current = true`) is attached to
+   the issue and shown on the report page.
+4. If the representative's X account has been **admin-verified**
+   (`x_verified_by_admin` + username), an escalation is drafted (`READY`).
+
+Ambiguity guard: if a different active ward is within a 150 m margin the system
+refuses to guess (`WARD_AMBIGUOUS`) rather than risk mis-attributing.
+
+### Escalation lifecycle
+
+```
+PENDING → READY → APPROVED → PUBLISHED / REJECTED / FAILED
+```
+
+- **Publishing is manual-only** (no X API credentials required): approved posts
+  are shared through the `x.com/intent/tweet` composer or copied by the citizen
+  from the issue page.
+- Generated posts are sanitized (URLs, emails, phones, `@mentions` and
+  hashtags are stripped from citizen text) and capped at 280 characters.
+- A `resolution` post is drafted automatically when an issue is resolved and
+  its report post was actually published.
+- Admins manage representatives, wards and escalations under **Admin → 
+  Representatives** and **Admin → X Escalations**; officers can approve
+  escalations for their own department.
+- Every action is recorded in the `audit_logs` table.
+
+Environment (all optional, commented in `server/.env.example`):
+`X_INTEGRATION_ENABLED=false`, `AUTO_X_POST=false` — reserved for a future
+X API integration; publishing always goes through the manual composer today.
+
 ## Tests
 
 ```bash

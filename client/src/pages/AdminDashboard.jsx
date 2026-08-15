@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { http } from '../lib/api.js';
+import { Link } from 'react-router-dom';
+import { http, escalationApi, representativeApi } from '../lib/api.js';
 import { useToast } from '../lib/toast.jsx';
 import Skeleton, { SkeletonStats } from '../components/Skeleton.jsx';
 import Spinner from '../components/Spinner.jsx';
-import { FolderIcon, FlameIcon, AlertIcon, CheckIcon, ClockIcon, BotIcon, UploadIcon, CameraIcon } from '../components/icons.jsx';
+import { FolderIcon, FlameIcon, AlertIcon, CheckIcon, ClockIcon, BotIcon, UploadIcon, CameraIcon, LinkIcon, SendIcon } from '../components/icons.jsx';
+import { ESCALATION_COLORS, statusLabel } from '../lib/constants.js';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -13,6 +15,8 @@ const TABS = [
   { id: 'categories', label: 'Categories & depts' },
   { id: 'moderation', label: 'Moderation' },
   { id: 'locations', label: 'Locations' },
+  { id: 'representatives', label: 'Representatives' },
+  { id: 'escalations', label: 'X Escalations' },
   { id: 'import', label: 'Import CSV' },
 ];
 
@@ -59,6 +63,8 @@ export default function AdminDashboard() {
         {tab === 'categories' && <Categories />}
         {tab === 'moderation' && <Moderation />}
         {tab === 'locations' && <Locations />}
+        {tab === 'representatives' && <Representatives />}
+        {tab === 'escalations' && <Escalations />}
         {tab === 'import' && <ImportCsv />}
       </div>
     </div>
@@ -829,6 +835,346 @@ function ImportCsv() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------- Representatives ---------- */
+function Representatives() {
+  const [reps, setReps] = useState([]);
+  const [wards, setWards] = useState([]);
+  const [form, setForm] = useState({ name: '', designation: '', constituency: '', official_x_username: '', is_current: true, x_verified_by_admin: false });
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState({ type: '', text: '' });
+  const toast = useToast();
+
+  const load = () =>
+    Promise.all([
+      representativeApi.list({ includeInactive: true }),
+      representativeApi.wards(),
+    ])
+      .then(([r, w]) => {
+        setReps(r.representatives || []);
+        setWards(w.wards || []);
+      })
+      .catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const create = async (e) => {
+    e.preventDefault();
+    setMsg({ type: '', text: '' });
+    try {
+      await representativeApi.create({
+        name: form.name,
+        designation: form.designation || 'Nagar Sevak (Corporator)',
+        constituency: form.constituency,
+        official_x_username: form.official_x_username,
+        is_current: form.is_current,
+        x_verified_by_admin: form.x_verified_by_admin,
+      });
+      setForm({ name: '', designation: '', constituency: '', official_x_username: '', is_current: true, x_verified_by_admin: false });
+      toast.success('Representative created');
+      load();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    }
+  };
+
+  const toggleVerified = async (r) => {
+    setBusy(r.id);
+    try {
+      await representativeApi.verifyX(r.id, !r.x_verified_by_admin);
+      toast.success(!r.x_verified_by_admin ? 'X account verified' : 'Verification revoked');
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const toggleCurrent = async (r) => {
+    setBusy(r.id);
+    try {
+      await representativeApi.update(r.id, { is_current: !r.is_current });
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const assignWard = async (wardId, repId) => {
+    setBusy(`ward-${wardId}`);
+    try {
+      await representativeApi.linkWard(wardId, repId || null);
+      toast.success('Ward updated');
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="card overflow-x-auto">
+          <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
+            <h3 className="font-semibold text-ink-900">Representatives ({reps.length})</h3>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-ink-100 text-left text-xs text-ink-500">
+              <tr>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">X</th>
+                <th className="px-4 py-3">Verified</th>
+                <th className="px-4 py-3">Current</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reps.map((r) => (
+                <tr key={r.id} className="border-t border-ink-100">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-ink-900">{r.name}</p>
+                    <p className="text-xs text-ink-400">{r.designation}{r.ward_number ? ` · ${r.ward_number}` : ''}</p>
+                    {r.data_source === 'demo_seed' && <span className="badge bg-amber-100 text-amber-700">demo</span>}
+                  </td>
+                  <td className="px-4 py-3 text-ink-600">
+                    {r.official_x_username ? `@${r.official_x_username}` : <span className="text-ink-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => toggleVerified(r)} disabled={busy === r.id} className={`badge ${r.x_verified_by_admin ? 'bg-emerald-100 text-emerald-700' : 'bg-ink-100 text-ink-500'}`}>
+                      {r.x_verified_by_admin ? 'Verified' : 'Unverified'}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => toggleCurrent(r)} disabled={busy === r.id} className={`badge ${r.is_current ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'}`}>
+                      {r.is_current ? 'Active' : 'Inactive'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {reps.length === 0 && (
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-ink-400">No representatives yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="card p-5">
+          <h3 className="mb-1 font-semibold text-ink-900">Add representative</h3>
+          <p className="mb-4 text-sm text-ink-500">Elected ward member (Nagar Sevak / Corporator). Never auto-guessed.</p>
+          {msg.text && (
+            <div className={`mb-3 rounded-lg px-3 py-2 text-sm ${msg.type === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+              {msg.text}
+            </div>
+          )}
+          <form onSubmit={create} className="space-y-3">
+            <div>
+              <label className="label">Full name</label>
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" required minLength={2} />
+            </div>
+            <div>
+              <label className="label">Designation</label>
+              <input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} className="input" placeholder="Nagar Sevak (Corporator)" />
+            </div>
+            <div>
+              <label className="label">Constituency / ward</label>
+              <input value={form.constituency} onChange={(e) => setForm({ ...form, constituency: e.target.value })} className="input" placeholder="e.g. Ward 21, Wakad" />
+            </div>
+            <div>
+              <label className="label">X username</label>
+              <input value={form.official_x_username} onChange={(e) => setForm({ ...form, official_x_username: e.target.value })} className="input" placeholder="@handle (no @ needed)" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex items-center gap-2 text-sm text-ink-700">
+                <input type="checkbox" checked={form.is_current} onChange={(e) => setForm({ ...form, is_current: e.target.checked })} /> Current
+              </label>
+              <label className="flex items-center gap-2 text-sm text-ink-700">
+                <input type="checkbox" checked={form.x_verified_by_admin} onChange={(e) => setForm({ ...form, x_verified_by_admin: e.target.checked })} /> X verified
+              </label>
+            </div>
+            <button className="btn-primary w-full">Add representative</button>
+          </form>
+        </div>
+      </div>
+
+      <div className="card overflow-x-auto">
+        <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
+          <h3 className="font-semibold text-ink-900">Ward → Representative mapping</h3>
+          <span className="text-xs text-ink-400">Boundary locality or ward number determines the ward.</span>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-ink-100 text-left text-xs text-ink-500">
+            <tr>
+              <th className="px-4 py-3">Ward</th>
+              <th className="px-4 py-3">Boundary locality</th>
+              <th className="px-4 py-3">Representative</th>
+            </tr>
+          </thead>
+          <tbody>
+            {wards.map((w) => (
+              <tr key={w.id} className="border-t border-ink-100">
+                <td className="px-4 py-3">
+                  <p className="font-medium text-ink-900">{w.ward_number}</p>
+                  <p className="text-xs text-ink-400">{w.ward_name || w.city}</p>
+                </td>
+                <td className="px-4 py-3 text-ink-500">{w.locality_name || '—'}</td>
+                <td className="px-4 py-3">
+                  <select
+                    value={w.representative_id || ''}
+                    onChange={(e) => assignWard(w.id, e.target.value)}
+                    disabled={busy === `ward-${w.id}`}
+                    className="input max-w-xs py-1.5 text-sm"
+                  >
+                    <option value="">— No representative —</option>
+                    {reps.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}{r.official_x_username ? ` (@${r.official_x_username})` : ''}</option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+            {wards.length === 0 && (
+              <tr><td colSpan={3} className="px-4 py-8 text-center text-ink-400">No wards seeded yet. Run seedWards in the server seed.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Escalations ---------- */
+const ESC_FILTERS = ['ALL', 'PENDING', 'READY', 'APPROVED', 'PUBLISHED', 'REJECTED', 'FAILED'];
+
+function Escalations() {
+  const [escs, setEscs] = useState([]);
+  const [filter, setFilter] = useState('ALL');
+  const [busy, setBusy] = useState('');
+  const toast = useToast();
+
+  const load = () =>
+    escalationApi.list(filter === 'ALL' ? {} : { status: filter })
+      .then((d) => setEscs(d.escalations || []))
+      .catch(() => {});
+  useEffect(() => { load(); }, [filter]);
+
+  const run = async (id, fn, okMsg) => {
+    setBusy(id);
+    try {
+      await fn();
+      toast.success(okMsg);
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const approve = (esc) => run(esc.id, () => escalationApi.approve(esc.id), 'Escalation approved');
+  const reject = (esc) => {
+    const reason = window.prompt('Reason for rejection (optional)', '');
+    if (reason === null) return;
+    run(esc.id, () => escalationApi.reject(esc.id, reason), 'Escalation rejected');
+  };
+  const publish = (esc) => {
+    const url = window.prompt('Paste the public X post URL', `https://x.com/${esc.representative_x_username || 'civiceye'}/status/`);
+    if (!url) return;
+    run(esc.id, () => escalationApi.publish(esc.id, url), 'Marked as published');
+  };
+  const retry = (esc) => run(esc.id, () => escalationApi.retry(esc.id), 'Retry queued');
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {ESC_FILTERS.map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`rounded-full px-3 py-1 text-xs font-bold transition ${filter === f ? 'bg-blue-900 text-white' : 'bg-white text-blue-900 ring-1 ring-ink-200'}`}
+          >
+            {f === 'ALL' ? 'All' : statusLabel(f)}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {escs.map((esc) => (
+          <div key={esc.id} className="card p-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link to={`/issues/${esc.public_id}`} className="font-semibold text-ink-900 hover:text-brand-700">
+                #{esc.public_id} · {esc.title}
+              </Link>
+              <span className={`badge ${ESCALATION_COLORS[esc.status]?.bg || 'bg-ink-100'} ${ESCALATION_COLORS[esc.status]?.text || 'text-ink-600'}`}>
+                {statusLabel(esc.status)}
+              </span>
+              <span className="badge bg-ink-100 text-ink-500">{esc.post_type}</span>
+              {esc.representative_name && (
+                <span className="badge bg-brand-50 text-brand-700">
+                  → {esc.representative_name}{esc.representative_x_username ? ` (@${esc.representative_x_username})` : ''}
+                </span>
+              )}
+              <span className="ml-auto text-xs text-ink-400">{esc.area} · {esc.city}</span>
+            </div>
+
+            {esc.generated_text && (
+              <p className="mt-3 whitespace-pre-wrap rounded-xl bg-ink-50 p-3 text-sm text-ink-700">
+                {esc.generated_text}
+                <span className="ml-2 text-[11px] text-ink-400">{esc.generated_text.length}/280</span>
+              </p>
+            )}
+            {esc.failure_reason && (
+              <p className="mt-2 text-xs text-red-600">Reason: {esc.failure_reason}</p>
+            )}
+            {esc.external_post_url && (
+              <a href={esc.external_post_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700">
+                <LinkIcon size={12} /> {esc.external_post_url}
+              </a>
+            )}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {['PENDING', 'READY', 'FAILED'].includes(esc.status) && (
+                <button onClick={() => approve(esc)} disabled={busy === esc.id} className="btn-primary text-sm">
+                  <CheckIcon size={13} /> Approve
+                </button>
+              )}
+              {['PENDING', 'READY', 'APPROVED'].includes(esc.status) && (
+                <button onClick={() => reject(esc)} disabled={busy === esc.id} className="btn-outline text-sm text-red-600">
+                  Reject
+                </button>
+              )}
+              {esc.status === 'APPROVED' && (
+                <button onClick={() => publish(esc)} disabled={busy === esc.id} className="btn-primary text-sm">
+                  <SendIcon size={13} /> Mark published
+                </button>
+              )}
+              {esc.status === 'FAILED' && (
+                <button onClick={() => retry(esc)} disabled={busy === esc.id} className="btn-outline text-sm">
+                  Retry
+                </button>
+              )}
+              {esc.status === 'APPROVED' && (
+                <a
+                  href={`https://x.com/intent/tweet?text=${encodeURIComponent(esc.generated_text || '')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-outline text-sm"
+                >
+                  <SendIcon size={13} /> Open compose
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+        {escs.length === 0 && (
+          <div className="card p-8 text-center text-ink-400">No escalations{filter !== 'ALL' ? ` in ${statusLabel(filter)}` : ''}.</div>
+        )}
+      </div>
     </div>
   );
 }

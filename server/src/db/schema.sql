@@ -364,3 +364,109 @@ ALTER TABLE issues
 
 CREATE INDEX IF NOT EXISTS idx_locations_active_geo ON locations(lat, lng) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_issues_locality ON issues(locality_id);
+
+-- Elected representatives & X escalation --------------------------------------
+-- Single source of truth for elected representatives (Nagarsevak / Sarpanch /
+-- Corporator). Verified manually by admins — never guessed by AI. An escalation
+-- to X is only possible when x_verified_by_admin = true AND the official X
+-- username is set.
+
+CREATE TABLE IF NOT EXISTS representatives (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name                TEXT NOT NULL,
+  designation         TEXT NOT NULL DEFAULT 'Nagar Sevak (Corporator)',
+  constituency        TEXT NOT NULL DEFAULT '',
+  official_x_username TEXT NOT NULL DEFAULT '',
+  official_x_user_id  TEXT NOT NULL DEFAULT '',
+  x_profile_url       TEXT NOT NULL DEFAULT '',
+  x_verified_by_admin BOOLEAN NOT NULL DEFAULT FALSE,
+  data_source         TEXT NOT NULL DEFAULT '',
+  source_url          TEXT NOT NULL DEFAULT '',
+  active_from         DATE,
+  active_until        DATE,
+  is_current          BOOLEAN NOT NULL DEFAULT TRUE,
+  last_verified_at    TIMESTAMPTZ,
+  notes               TEXT NOT NULL DEFAULT '',
+  created_by          UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reps_current ON representatives(is_current)
+  WHERE is_current = true;
+
+-- Wards registry. Each ward links to the locality record that provides its
+-- centre/radius (boundary_locality_id) and to its elected representative.
+CREATE TABLE IF NOT EXISTS wards (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  city                 TEXT NOT NULL,
+  ward_number          TEXT NOT NULL,
+  ward_name            TEXT NOT NULL DEFAULT '',
+  boundary_locality_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+  representative_id    UUID REFERENCES representatives(id) ON DELETE SET NULL,
+  is_active            BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (city, ward_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wards_locality ON wards(boundary_locality_id);
+CREATE INDEX IF NOT EXISTS idx_wards_rep ON wards(representative_id);
+
+-- Tracks one X escalation per issue (report post + optional resolution post).
+CREATE TABLE IF NOT EXISTS issue_escalations (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  issue_id           UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  representative_id  UUID REFERENCES representatives(id) ON DELETE SET NULL,
+  platform           TEXT NOT NULL DEFAULT 'x',
+  status             TEXT NOT NULL DEFAULT 'PENDING'
+                     CHECK (status IN ('PENDING','READY','APPROVED','PUBLISHED',
+                                       'REJECTED','FAILED')),
+  generated_text     TEXT NOT NULL DEFAULT '',
+  external_post_id   TEXT NOT NULL DEFAULT '',
+  external_post_url  TEXT NOT NULL DEFAULT '',
+  published_at       TIMESTAMPTZ,
+  approved_by        UUID REFERENCES users(id) ON DELETE SET NULL,
+  rejected_by        UUID REFERENCES users(id) ON DELETE SET NULL,
+  failure_reason     TEXT NOT NULL DEFAULT '',
+  retry_count        INTEGER NOT NULL DEFAULT 0,
+  post_type          TEXT NOT NULL DEFAULT 'report'
+                     CHECK (post_type IN ('report','resolution')),
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (issue_id, post_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_escalations_issue ON issue_escalations(issue_id);
+CREATE INDEX IF NOT EXISTS idx_escalations_status ON issue_escalations(status)
+  WHERE status IN ('READY','PENDING','APPROVED');
+
+ALTER TABLE issues
+  ADD COLUMN IF NOT EXISTS representative_id UUID REFERENCES representatives(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_issues_representative ON issues(representative_id);
+
+-- Append-only audit trail for representative changes and escalation actions.
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+  action      TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id   TEXT NOT NULL DEFAULT '',
+  details     JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(entity_type, entity_id, created_at);
+
+DROP TRIGGER IF EXISTS trg_reps_touch ON representatives;
+CREATE TRIGGER trg_reps_touch BEFORE UPDATE ON representatives
+  FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+DROP TRIGGER IF EXISTS trg_wards_touch ON wards;
+CREATE TRIGGER trg_wards_touch BEFORE UPDATE ON wards
+  FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+DROP TRIGGER IF EXISTS trg_escalations_touch ON issue_escalations;
+CREATE TRIGGER trg_escalations_touch BEFORE UPDATE ON issue_escalations
+  FOR EACH ROW EXECUTE FUNCTION touch_updated_at();

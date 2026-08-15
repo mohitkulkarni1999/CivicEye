@@ -38,4 +38,8 @@ export const env = {
   dbLogging: bool(process.env.DB_LOGGING, false),
   rateLimitWindow: int(process.env.RATE_LIMIT_WINDOW, 60000),
   rateLimitMax: int(process.env.RATE_LIMIT_MAX, 600),
+  // X (Twitter) escalation. Publishing is manual-only today (x.com share intent)
+  // and needs no credentials. These flags reserve the future X API path.
+  xIntegrationEnabled: bool(process.env.X_INTEGRATION_ENABLED, false),
+  autoXPost: bool(process.env.AUTO_X_POST, false),
 };

@@ -10,6 +10,8 @@ import { env } from '../config/env.js';
 import { UPLOAD_DIR } from '../services/storage/index.js';
 import { computeDHash, toGray8 } from '../middleware/upload.js';
 import { computePriorityScore } from '../services/priority.service.js';
+import { findLocality } from '../services/locality.service.js';
+import { maybeCreateReportEscalation } from '../services/escalation.service.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -116,6 +118,76 @@ async function seedLocations() {
     );
   }
   logger.info(`Seeded ${LOCATIONS.length} localities.`);
+}
+
+// Build the ward registry from the seeded localities: one ward per distinct
+// (city, ward_no), pointing its boundary at the first locality for that ward.
+// Runs every seed so the registry always matches the locality set.
+async function seedWards() {
+  const { rows } = await query(
+    `SELECT * FROM locations
+      WHERE is_active = true AND slug NOT LIKE '@%' AND ward_no <> ''
+      ORDER BY city, ward_no, name ASC`,
+  );
+  const seen = new Set();
+  for (const l of rows) {
+    const key = `${l.city}||${l.ward_no}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    await query(
+      `INSERT INTO wards (city, ward_number, ward_name, boundary_locality_id)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (city, ward_number) DO UPDATE SET
+         ward_name = EXCLUDED.ward_name,
+         boundary_locality_id = COALESCE(wards.boundary_locality_id, EXCLUDED.boundary_locality_id)`,
+      [l.city, l.ward_no, l.name, l.id],
+    );
+  }
+  logger.info(`Seeded ${seen.size} wards from localities.`);
+}
+
+// DEMO ONLY: clearly-marked placeholder representatives so the escalation UI is
+// visible without inventing real people. They have NO X username and are NOT
+// x-verified, so nothing can ever be published against them.
+async function seedDemoRepresentatives() {
+  const { rows } = await query(
+    `SELECT * FROM locations
+      WHERE is_active = true AND ward_no <> '' AND officer_name <> ''
+      ORDER BY officer_name ASC`,
+  );
+  const repIdByName = new Map();
+  for (const l of rows) {
+    if (repIdByName.has(l.officer_name)) continue;
+    const existing = await query(
+      `SELECT id FROM representatives WHERE name = $1 AND data_source = 'demo_seed' LIMIT 1`,
+      [l.officer_name],
+    );
+    let repId = existing.rows[0]?.id;
+    if (!repId) {
+      const ins = await query(
+        `INSERT INTO representatives
+           (name, designation, data_source, notes, is_current, x_verified_by_admin)
+         VALUES ($1, $2, 'demo_seed',
+                 'DEMO DATA - replace with a verified elected representative', true, false)
+         RETURNING id`,
+        [l.officer_name, l.officer_role || 'Nagar Sevak (Corporator)'],
+      );
+      repId = ins.rows[0].id;
+    }
+    repIdByName.set(l.officer_name, repId);
+  }
+
+  for (const l of rows) {
+    const repId = repIdByName.get(l.officer_name);
+    if (!repId) continue;
+    await query(
+      `UPDATE wards
+          SET representative_id = COALESCE(representative_id, $1)
+        WHERE city = $2 AND ward_number = $3`,
+      [repId, l.city, l.ward_no],
+    );
+  }
+  logger.info(`Seeded ${repIdByName.size} demo representatives (X not verified).`);
 }
 
 const DEV_PASSWORD = 'CivicEye@2026';
@@ -454,10 +526,13 @@ export async function seedDatabase(options = {}) {
   const { force = false } = options;
 
   await seedLocations();
+  await seedWards();
 
   if (!env.demoMode) {
     return { seeded: false, issues: 0, note: 'Demo seeding is disabled (DEMO_MODE=false)' };
   }
+
+  await seedDemoRepresentatives();
 
   const existing = await query('SELECT COUNT(*)::int AS n FROM issues');
   if (existing.rows[0].n >= 100 && !force) {
@@ -552,6 +627,8 @@ export async function seedDatabase(options = {}) {
     const lat = area.lat + (rng() - 0.5) * 0.02;
     const lng = area.lng + (rng() - 0.5) * 0.02;
 
+    const locality = await findLocality(lat, lng);
+
     const title = pick(rng, TITLES[slug] || TITLES.other);
     const descPool = DESCRIPTIONS[slug] || DESCRIPTIONS.default;
     const description = pick(rng, descPool);
@@ -571,8 +648,9 @@ export async function seedDatabase(options = {}) {
     const { rows } = await query(
       `INSERT INTO issues
         (reporter_id, is_anonymous, category_id, department_id, title, description, status, severity,
-         lat, lng, address, area, city, landmark, confidence, is_demo, reported_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true, $16, $16)
+         lat, lng, address, area, city, landmark, confidence, is_demo, reported_at, created_at,
+         locality_id, locality_type, ward_no)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true, $16, $16, $17, $18, $19)
        RETURNING id, public_id`,
       [
         reporter,
@@ -591,10 +669,20 @@ export async function seedDatabase(options = {}) {
         `${pick(rng, ['near chowk', 'opposite gate', 'by the bus stop', ''])}`,
         confidence,
         reportedAt,
+        locality?.id ?? null,
+        locality?.type ?? '',
+        locality?.ward_no ?? '',
       ],
     );
     const issue = rows[0];
     issueIds.push(issue.id);
+
+    // Attach the elected representative + create a (non-X-verified) escalation
+    // draft so the demo showcases the full representative pipeline.
+    await maybeCreateReportEscalation({
+      issue,
+      category: CATEGORIES.find((c) => c.slug === slug) || null,
+    });
 
     // Primary image
     await query(
