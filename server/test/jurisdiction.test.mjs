@@ -72,6 +72,20 @@ const POINTS = {
   warjeKarveBoundary: { lat: 18.487, lng: 73.812 }, // inside both Ward 32 + Karve Nagar
 };
 
+// A rep "matches" a name when every significant token appears in one rep name —
+// handles both short forms ('Harshada Bhosale') and gazette forms
+// ('Bhosale Harshada Shantanu').
+function repTokens(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+}
+function hasRepWithTokens(repNames, expectedName) {
+  const tokens = new Set(repTokens(expectedName));
+  return repNames.some((n) => {
+    const own = repTokens(n);
+    return [...tokens].every((t) => own.includes(t));
+  });
+}
+
 let server;
 
 async function main() {
@@ -105,8 +119,8 @@ async function main() {
     step(`A.${label} -> ward number 32`, res.ward?.ward_number === 'Ward 32', `ward=${res.ward?.ward_number}`);
     step(`A.${label} -> ward name Warje`, (res.ward?.ward_name || '').toLowerCase().includes('warje'), `name=${res.ward?.ward_name}`);
     step(`A.${label} -> never Ward 10`, res.ward?.ward_number !== 'Ward 10', 'ok');
-    step(`A.${label} -> never Neeta Gupte`, !repNames.includes('Neeta Gupte'), repNames.join(', '));
-    step(`A.${label} -> 2026 corporators present`, ['Harshada Bhosale', 'Bharatbhushan Barate', 'Sayali Wanjale', 'Sachin Dodke'].every((n) => repNames.includes(n)), `n=${repNames.length}`);
+    step(`A.${label} -> never Neeta Gupte`, !hasRepWithTokens(repNames, 'Neeta Gupte'), repNames.join(', '));
+    step(`A.${label} -> 2026 corporators present`, ['Harshada Bhosale', 'Bharatbhushan Barate', 'Sayali Vanjale', 'Sachin Dodke'].every((n) => hasRepWithTokens(repNames, n)), `n=${repNames.length}`);
     step(`A.${label} -> official boundary source`, res.source === 'official_boundary', `source=${res.source}`);
     step(`A.${label} -> high confidence`, res.confidence === 'high', `conf=${res.confidence}`);
   }
@@ -220,7 +234,7 @@ async function main() {
     step('H.6 Ward 32 has 4 current representatives', w32?.representative_count === 4, `count=${w32?.representative_count}`);
 
     const reps = await api(base, '/api/admin/representatives', { token: adminToken });
-    const w32Rep = (reps.data?.representatives || []).find((x) => x.name === 'Harshada Bhosale');
+    const w32Rep = (reps.data?.representatives || []).find((x) => hasRepWithTokens([x.name], 'Harshada Bhosale'));
     step('H.7 rep carries party/seat', w32Rep?.party === 'BJP' && w32Rep?.seat === 'A', `party=${w32Rep?.party} seat=${w32Rep?.seat}`);
     step('H.8 rep linked to Ward 32', Array.isArray(w32Rep?.wards) && w32Rep.wards.some((x) => x.ward_number === 'Ward 32'), 'ok');
   }
@@ -257,7 +271,7 @@ async function main() {
     step('I.4 issue ward_id set', !!issue?.ward_id, 'set');
     step('I.5 resolution_source = official_boundary', issue?.resolution_source === 'official_boundary', `source=${issue?.resolution_source}`);
     step('I.6 issue ward_no = Ward 32', issue?.ward_no === 'Ward 32', `ward_no=${issue?.ward_no}`);
-    step('I.7 officer_name = verified rep (not locality officer)', issue?.officer_name === 'Harshada Bhosale', `officer=${issue?.officer_name}`);
+    step('I.7 officer_name = verified rep (not locality officer)', hasRepWithTokens([issue?.officer_name || ''], 'Harshada Bhosale'), `officer=${issue?.officer_name}`);
 
     const detail = await api(base, `/api/issues/${issue?.public_id}`);
     const d = detail.data?.issue;

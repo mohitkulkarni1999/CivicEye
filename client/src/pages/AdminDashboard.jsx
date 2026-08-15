@@ -848,7 +848,35 @@ function Representatives() {
   const [form, setForm] = useState({ name: '', designation: '', constituency: '', official_x_username: '', party: '', seat: '', corporation_id: '', is_current: true, x_verified_by_admin: false });
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState({ type: '', text: '' });
+  const [ingestSources, setIngestSources] = useState([]);
+  const [recentRuns, setRecentRuns] = useState([]);
+  const [ingestRunning, setIngestRunning] = useState(false);
+  const [includeBoundaries, setIncludeBoundaries] = useState(false);
   const toast = useToast();
+
+  const loadIngest = () =>
+    representativeApi
+      .ingestSources()
+      .then((d) => {
+        setIngestSources(d.sources || []);
+        setRecentRuns(d.recentRuns || []);
+      })
+      .catch(() => {});
+
+  const runIngest = async (source) => {
+    setIngestRunning(true);
+    try {
+      const d = await representativeApi.runIngest(source.id, includeBoundaries);
+      const summary = d.run?.summary || {};
+      toast.success(`Ingested: ${summary.wards} wards, ${summary.representatives} representatives`);
+      load();
+      loadIngest();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIngestRunning(false);
+    }
+  };
 
   const load = () =>
     Promise.all([
@@ -865,6 +893,7 @@ function Representatives() {
       })
       .catch(() => {});
   useEffect(() => { load(); }, []);
+  useEffect(() => { loadIngest(); }, []);
 
   const create = async (e) => {
     e.preventDefault();
@@ -953,6 +982,40 @@ function Representatives() {
               All ward representatives
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-ink-900">Import from official sources</h3>
+            <p className="text-sm text-ink-500">Fetch elected representatives automatically from the state election commission data. Names and parties come only from the official record; X handles are never filled by this — verify them manually before escalating.</p>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-ink-600">
+            <input type="checkbox" checked={includeBoundaries} onChange={(e) => setIncludeBoundaries(e.target.checked)} className="h-4 w-4" />
+            Also fetch ward polygons (OSM)
+          </label>
+        </div>
+        <div className="mt-4 space-y-3">
+          {ingestSources.length === 0 && <p className="text-sm text-ink-400">No ingest sources configured.</p>}
+          {ingestSources.map((s) => (
+            <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ink-100 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-ink-900">{s.label}</p>
+                <p className="text-xs text-ink-500">Corporation: {s.corporationCode}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {recentRuns.find((x) => x.source === s.id && x.status === 'ok') && (
+                  <span className="text-xs text-emerald-600">
+                    Last: {recentRuns.find((x) => x.source === s.id && x.status === 'ok').summary?.wards || 0} wards · {recentRuns.find((x) => x.source === s.id && x.status === 'ok').summary?.representatives || 0} reps
+                  </span>
+                )}
+                <button onClick={() => runIngest(s)} disabled={ingestRunning} className="rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50">
+                  {ingestRunning ? 'Running…' : 'Run ingest'}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

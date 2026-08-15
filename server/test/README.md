@@ -53,6 +53,7 @@ Citizen accounts are **not** seeded — register them from the signup page.
 | `test/api.test.mjs` | Auth, RBAC, officer/admin workflow, public endpoints (55 steps). |
 | `test/escalation.test.mjs` | Representative resolve → issue → auto-escalation → approve/publish lifecycle (40 steps). |
 | `test/jurisdiction.test.mjs` | **Municipal jurisdiction**: Warje → PMC Ward 32 (four 2026 corporators, never Karve Nagar/Neeta Gupte), Kothrud/Shivajinagar → PMC, Pimpri → PCMC, boundary `WARD_AMBIGUOUS`, cross-corporation `CORPORATION_MISMATCH`, and end-to-end issue provenance (44 steps). |
+| `test/ingest.test.mjs` | **Automatic ingestion**: official CSV parsing, idempotent re-runs (no duplicate source_keys), ward+seat adoption (never duplicates), no X-handles written, stale-seat demotion + re-adoption, admin sources/run API, and Warje resolution returning the four corporators (33 steps). Cleans up its temporary ward. |
 
 Run all suites individually:
 
@@ -60,6 +61,7 @@ Run all suites individually:
 node test/api.test.mjs
 node test/escalation.test.mjs
 node test/jurisdiction.test.mjs
+node test/ingest.test.mjs
 ```
 
 ## The 11 test sections

@@ -514,6 +514,30 @@ ALTER TABLE representatives
 
 CREATE INDEX IF NOT EXISTS idx_reps_corporation ON representatives(corporation_id);
 
+-- Idempotent ingestion key: a representative imported from an official source
+-- (e.g. "pmc_2026_opencity:ward:32:seat:B"). Ingested rows are safe to re-run.
+ALTER TABLE representatives
+  ADD COLUMN IF NOT EXISTS source_key TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_reps_source_key
+  ON representatives(source_key) WHERE source_key IS NOT NULL;
+
+-- Audit trail for automatic official-source ingestion runs.
+CREATE TABLE IF NOT EXISTS ingest_runs (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source          TEXT NOT NULL,
+  corporation_code TEXT NOT NULL DEFAULT '',
+  status          TEXT NOT NULL DEFAULT 'running', -- running | ok | failed
+  summary         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  error           TEXT,
+  created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+  started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at     TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_ingest_runs_source ON ingest_runs(source, started_at DESC);
+
+
 -- Issues capture the exact jurisdiction + resolution provenance.
 ALTER TABLE issues
   ADD COLUMN IF NOT EXISTS corporation_id      UUID REFERENCES corporations(id) ON DELETE SET NULL,

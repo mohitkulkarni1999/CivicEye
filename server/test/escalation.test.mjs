@@ -115,6 +115,26 @@ async function main() {
   step('2.4 admin verifies X account', r.data?.representative?.x_verified_by_admin === true, `verified=${r.data?.representative?.x_verified_by_admin}`);
   step('2.5 verification timestamp set', !!r.data?.representative?.last_verified_at, r.data?.representative?.last_verified_at || 'missing');
 
+  // Self-heal: prior runs left current 'Test Rep <ts>' reps on Ward 21; the
+  // primary-seat trigger orders by representative_id, so an old rep would
+  // shadow the new one. Deactivate all stale test reps so THIS rep is primary.
+  {
+    const list = await api(base, '/api/admin/representatives', { token: adminToken });
+    const stale = (list.data?.representatives || [])
+      .filter((x) => x.name?.startsWith('Test Rep ') && x.id !== rep?.id);
+    for (const s of stale) {
+      await api(base, `/api/admin/representatives/${s.id}`, {
+        method: 'PATCH',
+        token: adminToken,
+        body: { is_current: false },
+      });
+    }
+    const after = await api(base, '/api/admin/representatives', { token: adminToken });
+    const staleIds = new Set(stale.map((s) => s.id));
+    const stillCurrent = (after.data?.representatives || []).filter((x) => staleIds.has(x.id) && x.is_current);
+    step('2.6 stale test reps deactivated', stillCurrent.length === 0, `deactivated=${stale.length}`);
+  }
+
   // ----------------------------------------------------- Link rep to a ward
   section('3. Ward linking + public resolution');
   const wardsRes = await api(base, '/api/admin/wards', { token: adminToken });

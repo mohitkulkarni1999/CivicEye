@@ -25,6 +25,7 @@ import {
   retryEscalationAction,
   updateEscalationTextAction,
 } from '../controllers/escalation.controller.js';
+import { adminListIngestSources, adminRunIngest } from '../controllers/ingest.controller.js';
 
 const router = Router();
 
@@ -84,6 +85,10 @@ router.get('/wards', asyncHandler(adminListWards));
 router.post('/wards', asyncHandler(adminCreateWard));
 router.patch('/wards/:id', asyncHandler(adminUpdateWard));
 router.post('/wards/:id/boundary', asyncHandler(adminSetWardBoundaryGeoJSON));
+
+// Automatic official-source ingestion (state election commission data)
+router.get('/ingest/sources', asyncHandler(adminListIngestSources));
+router.post('/ingest/run', escalateLimiter, asyncHandler(adminRunIngest));
 
 // X escalations
 router.get('/escalations', asyncHandler(listEscalationsAdmin));

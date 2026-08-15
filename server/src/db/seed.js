@@ -234,9 +234,15 @@ async function seedVerifiedWard32() {
   const ward = (await query("SELECT id FROM wards WHERE city = 'Pune' AND ward_number = 'Ward 32'")).rows[0];
   if (!corp || !ward) return;
   for (const rep of WARD_32_REPS) {
+    // Skip if this (ward, seat) already has a current representative — e.g.
+    // claimed by the automatic official-source ingestion, which renames the
+    // seeded reps to their gazette spellings.
     const existing = (await query(
-      `SELECT id FROM representatives WHERE name = $1 AND seat = $2 AND data_source = 'pune_2026_election' LIMIT 1`,
-      [rep.name, rep.seat],
+      `SELECT r.id FROM representatives r
+       JOIN ward_representatives wr ON wr.representative_id = r.id
+       WHERE wr.ward_id = $1 AND wr.seat = $2 AND wr.is_current = true
+       LIMIT 1`,
+      [ward.id, rep.seat],
     )).rows[0];
     let repId = existing?.id;
     if (!repId) {

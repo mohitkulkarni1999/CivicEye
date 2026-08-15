@@ -68,13 +68,17 @@ seeded** — register them from the signup page.
   `(city, ward_no)`, with a boundary ring generated from the locality radius),
   and demo representatives are seeded **only** when `DEMO_MODE=true` (clearly
   marked, with no X usernames).
-- PMC **Ward 32 (Warje-Popularnagar)** is seeded with its official 2026 election
-  boundary polygon and the four elected corporators (Harshada Bhosale,
-  Bharatbhushan Barate, Sayali Wanjale, Sachin Dodke — verified via election
-  coverage, `data_source = 'pune_2026_election'`, no X handles until the admin
-  adds and verifies them). Warje points therefore resolve to **PMC Ward 32** —
+- PMC **Ward 32 (Warje-Popularnagar)** carries its official 2026 election
+  boundary polygon, and all 41 PMC wards have their elected corporators loaded
+  **automatically from the official election-commission CSV** (`npm run ingest`,
+  see `ELECTED_REP_ESCALATION.md` §11) — no manual entry, no wrong person. Ward
+  32's corporators are Bhosale Harshada Shantanu (A), Barate Bharatbhushan
+  Sharadchandra (B), Vanjale Sayali Ramesh (C), Dodke Sachin Shivaji (D), all
+  `data_source = 'pmc_2026_opencity'`, with no X handles until the admin adds
+  and verifies them. Warje points therefore resolve to **PMC Ward 32** —
   never to the neighbouring Karve Nagar ward. Ward boundaries are managed under
-  **Admin → Representatives** (paste rings or GeoJSON).
+  **Admin → Representatives** (paste rings or GeoJSON) or auto-fetched from OSM
+  via the "Also fetch ward polygons" ingest toggle.
 
 ## Elected representative & X escalation
 

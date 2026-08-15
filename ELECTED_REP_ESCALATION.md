@@ -332,11 +332,14 @@ No API keys, no auto-publishing of anything, ever. The `AUTO_X_POST` /
   from the existing locality data, each with a **boundary ring** in
   `ward_boundaries` (a 16-gon circle around the locality for legacy wards, or an
   explicit polygon where real boundaries exist). Re-running never duplicates.
-- **PMC Ward 32 (Warje-Popularnagar)** — seeded with its official 2026 election
-  polygon and the **four elected corporators** (Harshada Bhosale, Bharatbhushan
-  Barate, Sayali Wanjale, Sachin Dodke) with `data_source = 'pune_2026_election'`
-  and **no X handles** — so nothing escalates until the admin adds and verifies
-  their X accounts. Warje points resolve to PMC Ward 32, never to Karve Nagar.
+- **PMC Ward 32 (Warje-Popularnagar)** — has its official 2026 election polygon
+  (13 boundary points) and the **four elected corporators**: Bhosale Harshada
+  Shantanu (A), Barate Bharatbhushan Sharadchandra (B), Vanjale Sayali Ramesh
+  (C), Dodke Sachin Shivaji (D). These are loaded by the **automatic
+  ingestion** (§11) from the official election-commission CSV with
+  `data_source = 'pmc_2026_opencity'` and **no X handles** — so nothing
+  escalates until the admin adds and verifies their X accounts. Warje points
+  resolve to PMC Ward 32, never to Karve Nagar.
 - **Demo representatives** (`seedDemoRepresentatives`) — only when
   `DEMO_MODE=true`, clearly marked with `data_source = 'demo_seed'`, **never**
   given X usernames, so they can never be published. Uses `COALESCE` so
@@ -361,7 +364,80 @@ No API keys, no auto-publishing of anything, ever. The `AUTO_X_POST` /
 
 ---
 
-## 11. Files
+## 11. Automatic ingestion of elected representatives (no manual entry)
+
+The app can load ward winners **automatically from official election data** —
+no hand-typing, no wrong person. `server/src/services/ingest/`.
+
+### Flow
+
+```
+npm run ingest pmc_2026 [--boundaries]
+        │
+        ▼
+registry (sources/index.js) → PMC2026 connector
+        │   fetchCsv() — official SEC CSV via opencity.in
+        ▼
+parseCsv → mapRows (Ward No., Ward Name, Seat, Reservation,
+                     Elected Candidate Name, Party)
+        │
+        ▼
+per ward:  upsertWard (normalized to 'Ward N', merges into
+          existing rows — never creates a parallel ward)
+        ▼
+per seat:  upsertRepForSeat (idempotent by source_key;
+          adopts the existing holder of that ward+seat)
+        │
+        ▼
+demoteStaleSeats (seats that vanished are deactivated,
+                  never deleted)
+        │
+        ▼
+ingest_runs row (status ok/failed + summary) + audit log
+```
+
+### "No wrong person" guarantees
+
+1. **Names, parties and seats come only from the official payload** — never
+   AI-guessed, never derived from locality or candidate lists.
+2. **X handles are never written by ingestion.** `official_x_username` stays
+   empty and `x_verified_by_admin` stays false, so a post can only be drafted
+   after an admin verifies the account.
+3. **Adoption by (ward, seat).** One seat = one elected member. If the seat is
+   already held (e.g. an earlier seed), the existing rep is *adopted*: its
+   official fields are refreshed, its source_key claimed, and any admin X
+   verification is preserved — it is never duplicated.
+4. **Idempotent.** Every row carries a `source_key`
+   (`pmc_2026_opencity:ward:Ward 32:seat:A`) backed by a unique index;
+   re-running updates in place. Stale seats are demoted (`is_current = false`),
+   never deleted.
+5. **Ward numbers are normalized** to the app convention `Ward N`, so
+   ingestion merges into the existing ward row (boundary polygon and locality
+   links intact) instead of creating a parallel `"32"` row that would never get
+   the polygon.
+
+### Sources registry
+
+Each source implements `{ id, label, corporationCode, corporationName, city,
+dataSource, designation, sourceUrl, fetchCsv(), mapRows(rows),
+constituencyFor(...) }`. Only `pmc_2026` is registered today (Pune Municipal
+Corporation 2026 ward-wise winners, published by the SEC via
+`https://data.opencity.in/dataset/pmc-election-results-2026`). Adding a city =
+adding one connector.
+
+### Admin UI + API
+
+- **Admin → Representatives → "Import from official sources"** card lists the
+  sources, shows the last run summary, and has a *Run ingest* button (with an
+  optional "fetch ward polygons (OSM)" toggle).
+- `GET /api/admin/ingest/sources` — registered sources + 10 most recent runs.
+- `POST /api/admin/ingest/run` `{ source, includeBoundaries }` — runs a source
+  (admin only, rate-limited). An optional `csvOverride` field is accepted as a
+  test hook / admin correction and is never sent by the UI.
+
+---
+
+## 12. Files
 
 | file | role |
 |---|---|
@@ -375,5 +451,12 @@ No API keys, no auto-publishing of anything, ever. The `AUTO_X_POST` /
 | `server/src/controllers/officer.controller.js` | resolution-post hook |
 | `server/src/db/schema.sql` | `corporations`, `wards`, `ward_boundaries`, `representatives`, `ward_representatives`, `app_settings`, `issue_escalations`, `audit_logs` + `point_in_ring()` / `point_in_ward()` |
 | `server/src/db/seed.js` | ward boundaries + Ward 32 polygon + verified representatives + demo seeding |
+| `server/src/services/ingest/index.js` | automatic official-source ingestion: upsert/adopt/demote, ward-number normalization, `parseCsv` |
+| `server/src/services/ingest/sources/pmc2026.js` | PMC 2026 connector (official SEC CSV) |
+| `server/src/services/ingest/sources/index.js` | sources registry |
+| `server/src/services/ingest/boundaries.js` | OSM Overpass ward-polygon fetcher |
+| `server/src/db/ingest.mjs` | `npm run ingest` CLI |
+| `server/src/controllers/ingest.controller.js` | admin ingest endpoints (sources list + run) |
 | `server/test/escalation.test.mjs` | escalation end-to-end suite (40 steps) |
 | `server/test/jurisdiction.test.mjs` | municipal jurisdiction suite (44 steps) |
+| `server/test/ingest.test.mjs` | automatic-ingestion suite (33 steps: parse, idempotency, adoption, no-X, demotion, admin API, Warje resolution) |

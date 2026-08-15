@@ -80,4 +80,6 @@ export const representativeApi = {
   linkWard: (wardId, representativeId) => http.patch(`/api/admin/wards/${wardId}`, { representativeId }),
   tagRule: () => http.get('/api/admin/settings/escalation-tag-rule'),
   setTagRule: (value) => http.put('/api/admin/settings/escalation-tag-rule', { value }),
+  ingestSources: () => http.get('/api/admin/ingest/sources'),
+  runIngest: (source, includeBoundaries = false) => http.post('/api/admin/ingest/run', { source, includeBoundaries }),
 };
