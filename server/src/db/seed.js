@@ -65,41 +65,110 @@ const AREAS = [
 // Administrative units with the responsible local official.
 // type: metro_ward (Pune Municipal Corporation) | municipal_ward (PCMC) |
 //       town (Nagar Panchayat) | village (Gram Panchayat)
+// corporation: PMC | PCMC (jurisdiction gate — a locality can never leak a rep
+// from the other corporation). Derives the ward's corporation in seedWards.
 const LOCATIONS = [
-  // Villages (Mulshi / Maval taluka — Gram Panchayat, Sarpanch)
-  { name: 'Hinjewadi Phase 1', area: 'Hinjewadi Phase 1', city: 'Pune', lat: 18.5915, lng: 73.739, radius_m: 900, type: 'village', ward_no: 'GP Hinjewadi', officer: 'Dattatray Shinde', role: 'Sarpanch', party: 'NCP (Ajit Pawar)', phone: '98500 11201' },
-  { name: 'Hinjewadi Phase 2', area: 'Hinjewadi Phase 2', city: 'Pune', lat: 18.5815, lng: 73.729, radius_m: 900, type: 'village', ward_no: 'GP Hinjewadi', officer: 'Dattatray Shinde', role: 'Sarpanch', party: 'NCP (Ajit Pawar)', phone: '98500 11201' },
-  { name: 'Hinjewadi Phase 3', area: 'Hinjewadi Phase 3', city: 'Pune', lat: 18.5735, lng: 73.739, radius_m: 900, type: 'village', ward_no: 'GP Hinjewadi', officer: 'Dattatray Shinde', role: 'Sarpanch', party: 'NCP (Ajit Pawar)', phone: '98500 11201' },
+  // Villages (Mulshi / Maval taluka — Gram Panchayat, Sarpanch; under PMC limits)
+  { name: 'Hinjewadi Phase 1', area: 'Hinjewadi Phase 1', city: 'Pune', lat: 18.5915, lng: 73.739, radius_m: 900, type: 'village', ward_no: 'GP Hinjewadi', officer: 'Dattatray Shinde', role: 'Sarpanch', party: 'NCP (Ajit Pawar)', phone: '98500 11201', corporation: 'PMC' },
+  { name: 'Hinjewadi Phase 2', area: 'Hinjewadi Phase 2', city: 'Pune', lat: 18.5815, lng: 73.729, radius_m: 900, type: 'village', ward_no: 'GP Hinjewadi', officer: 'Dattatray Shinde', role: 'Sarpanch', party: 'NCP (Ajit Pawar)', phone: '98500 11201', corporation: 'PMC' },
+  { name: 'Hinjewadi Phase 3', area: 'Hinjewadi Phase 3', city: 'Pune', lat: 18.5735, lng: 73.739, radius_m: 900, type: 'village', ward_no: 'GP Hinjewadi', officer: 'Dattatray Shinde', role: 'Sarpanch', party: 'NCP (Ajit Pawar)', phone: '98500 11201', corporation: 'PMC' },
   // Municipal wards (Pimpri-Chinchwad Municipal Corporation)
-  { name: 'Wakad', area: 'Wakad', city: 'Pimpri-Chinchwad', lat: 18.5971, lng: 73.7767, radius_m: 1400, type: 'municipal_ward', ward_no: 'Ward 21', officer: 'Mahesh Chitnis', role: 'Nagar Sevak (Corporator)', party: 'Shiv Sena (Uddhav)', phone: '98500 11202' },
-  { name: 'Balewadi', area: 'Balewadi', city: 'Pimpri-Chinchwad', lat: 18.5742, lng: 73.7647, radius_m: 1400, type: 'municipal_ward', ward_no: 'Ward 22', officer: 'Kavita Joshi', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11203' },
+  { name: 'Wakad', area: 'Wakad', city: 'Pimpri-Chinchwad', lat: 18.5971, lng: 73.7767, radius_m: 1400, type: 'municipal_ward', ward_no: 'Ward 21', officer: 'Mahesh Chitnis', role: 'Nagar Sevak (Corporator)', party: 'Shiv Sena (Uddhav)', phone: '98500 11202', corporation: 'PCMC' },
+  { name: 'Balewadi', area: 'Balewadi', city: 'Pimpri-Chinchwad', lat: 18.5742, lng: 73.7647, radius_m: 1400, type: 'municipal_ward', ward_no: 'Ward 22', officer: 'Kavita Joshi', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11203', corporation: 'PCMC' },
+  { name: 'Pimpri', area: 'Pimpri', city: 'Pimpri-Chinchwad', lat: 18.6172, lng: 73.8069, radius_m: 1600, type: 'municipal_ward', ward_no: 'Ward 1', officer: '', role: '', party: '', phone: '', corporation: 'PCMC' },
   // Metro city wards (Pune Municipal Corporation)
-  { name: 'Baner', area: 'Baner', city: 'Pune', lat: 18.5588, lng: 73.7837, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 9', officer: 'Ramesh Kulkarni', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11204' },
-  { name: 'Aundh', area: 'Aundh', city: 'Pune', lat: 18.5582, lng: 73.807, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 8', officer: 'Sunita Pawar', role: 'Nagar Sevak (Corporator)', party: 'Congress', phone: '98500 11205' },
-  { name: 'Pashan', area: 'Pashan', city: 'Pune', lat: 18.5397, lng: 73.7958, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 6', officer: 'Vijay Deshpande', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11206' },
-  { name: 'Bavdhan', area: 'Bavdhan', city: 'Pune', lat: 18.5167, lng: 73.7783, radius_m: 1800, type: 'metro_ward', ward_no: 'Ward 11', officer: 'Anil Bhave', role: 'Nagar Sevak (Corporator)', party: 'Congress', phone: '98500 11207' },
-  { name: 'Kothrud', area: 'Kothrud', city: 'Pune', lat: 18.5074, lng: 73.8077, radius_m: 2000, type: 'metro_ward', ward_no: 'Ward 8', officer: 'Sachin Godbole', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11208' },
-  { name: 'Karve Nagar', area: 'Karve Nagar', city: 'Pune', lat: 18.4917, lng: 73.8191, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 10', officer: 'Neeta Gupte', role: 'Nagar Sevak (Corporator)', party: 'NCP (Sharad)', phone: '98500 11209' },
-  { name: 'Shivajinagar', area: 'Shivajinagar', city: 'Pune', lat: 18.5308, lng: 73.8474, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 5', officer: 'Arjun Sathe', role: 'Nagar Sevak (Corporator)', party: 'Congress', phone: '98500 11210' },
-  { name: 'Koregaon Park', area: 'Koregaon Park', city: 'Pune', lat: 18.5363, lng: 73.8931, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 13', officer: 'Pooja Khandekar', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11211' },
-  { name: 'Viman Nagar', area: 'Viman Nagar', city: 'Pune', lat: 18.5679, lng: 73.9143, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 12', officer: 'Deepak Mulay', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11212' },
-  { name: 'Kharadi', area: 'Kharadi', city: 'Pune', lat: 18.5536, lng: 73.9407, radius_m: 2000, type: 'metro_ward', ward_no: 'Ward 12', officer: 'Deepak Mulay', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11212' },
-  { name: 'Hadapsar', area: 'Hadapsar', city: 'Pune', lat: 18.5041, lng: 73.9259, radius_m: 2000, type: 'metro_ward', ward_no: 'Ward 15', officer: 'Prakash Waghmare', role: 'Nagar Sevak (Corporator)', party: 'NCP (Ajit Pawar)', phone: '98500 11213' },
+  { name: 'Baner', area: 'Baner', city: 'Pune', lat: 18.5588, lng: 73.7837, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 9', officer: 'Ramesh Kulkarni', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11204', corporation: 'PMC' },
+  { name: 'Aundh', area: 'Aundh', city: 'Pune', lat: 18.5582, lng: 73.807, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 8', officer: 'Sunita Pawar', role: 'Nagar Sevak (Corporator)', party: 'Congress', phone: '98500 11205', corporation: 'PMC' },
+  { name: 'Pashan', area: 'Pashan', city: 'Pune', lat: 18.5397, lng: 73.7958, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 6', officer: 'Vijay Deshpande', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11206', corporation: 'PMC' },
+  { name: 'Bavdhan', area: 'Bavdhan', city: 'Pune', lat: 18.5167, lng: 73.7783, radius_m: 1800, type: 'metro_ward', ward_no: 'Ward 11', officer: 'Anil Bhave', role: 'Nagar Sevak (Corporator)', party: 'Congress', phone: '98500 11207', corporation: 'PMC' },
+  { name: 'Kothrud', area: 'Kothrud', city: 'Pune', lat: 18.5074, lng: 73.8077, radius_m: 2000, type: 'metro_ward', ward_no: 'Ward 8', officer: 'Sachin Godbole', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11208', corporation: 'PMC' },
+  { name: 'Warje', area: 'Warje', city: 'Pune', lat: 18.4786, lng: 73.7987, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 32', officer: '', role: '', party: '', phone: '', corporation: 'PMC' },
+  { name: 'Karve Nagar', area: 'Karve Nagar', city: 'Pune', lat: 18.4917, lng: 73.8191, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 10', officer: 'Neeta Gupte', role: 'Nagar Sevak (Corporator)', party: 'NCP (Sharad)', phone: '98500 11209', corporation: 'PMC' },
+  { name: 'Shivajinagar', area: 'Shivajinagar', city: 'Pune', lat: 18.5308, lng: 73.8474, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 5', officer: 'Arjun Sathe', role: 'Nagar Sevak (Corporator)', party: 'Congress', phone: '98500 11210', corporation: 'PMC' },
+  { name: 'Koregaon Park', area: 'Koregaon Park', city: 'Pune', lat: 18.5363, lng: 73.8931, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 13', officer: 'Pooja Khandekar', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11211', corporation: 'PMC' },
+  { name: 'Viman Nagar', area: 'Viman Nagar', city: 'Pune', lat: 18.5679, lng: 73.9143, radius_m: 1600, type: 'metro_ward', ward_no: 'Ward 12', officer: 'Deepak Mulay', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11212', corporation: 'PMC' },
+  { name: 'Kharadi', area: 'Kharadi', city: 'Pune', lat: 18.5536, lng: 73.9407, radius_m: 2000, type: 'metro_ward', ward_no: 'Ward 12', officer: 'Deepak Mulay', role: 'Nagar Sevak (Corporator)', party: 'BJP', phone: '98500 11212', corporation: 'PMC' },
+  { name: 'Hadapsar', area: 'Hadapsar', city: 'Pune', lat: 18.5041, lng: 73.9259, radius_m: 2000, type: 'metro_ward', ward_no: 'Ward 15', officer: 'Prakash Waghmare', role: 'Nagar Sevak (Corporator)', party: 'NCP (Ajit Pawar)', phone: '98500 11213', corporation: 'PMC' },
 ];
+
+// Explicit official ward boundary polygons (approx. from public delimitation
+// data; admin can replace via the ward boundary import). Each ring is a list of
+// [lat, lng] vertices (outer ring; closed by the writer). Key: `${city}||${ward}`.
+// Ward 32 = Warje-Popularnagar (Pune Municipal Corporation, 2025-26 delimitation).
+const WARD_BOUNDARIES = {
+  'Pune||Ward 32': [
+    [18.4945, 73.7945],
+    [18.4955, 73.806],
+    [18.4935, 73.815],
+    [18.4875, 73.8195],
+    [18.48, 73.8215],
+    [18.471, 73.8185],
+    [18.465, 73.814],
+    [18.4605, 73.806],
+    [18.4625, 73.7965],
+    [18.468, 73.7905],
+    [18.4765, 73.786],
+    [18.486, 73.788],
+  ],
+};
+
+// Verified winners — PMC 2026 civic election, Ward 32 (Warje-Popularnagar).
+// Seats A-D all won by BJP; verified against Hindustan Times / Indian Express /
+// Wikipedia (2026 Pune Municipal Corporation election) on 2026-08-15.
+// No X handles on file, so nothing escalates until an admin verifies a handle.
+const WARD_32_REPS = [
+  { name: 'Harshada Bhosale', seat: 'A', designation: 'Nagar Sevak (Corporator)', party: 'BJP', notes: 'PMC 2026 election, Ward 32 Warje-Popularnagar Seat A (SC-Women). Verified via public election results.' },
+  { name: 'Bharatbhushan Barate', seat: 'B', designation: 'Nagar Sevak (Corporator)', party: 'BJP', notes: 'PMC 2026 election, Ward 32 Warje-Popularnagar Seat B (OBC). Won by 25,027 votes.' },
+  { name: 'Sayali Wanjale', seat: 'C', designation: 'Nagar Sevak (Corporator)', party: 'BJP', notes: 'PMC 2026 election, Ward 32 Warje-Popularnagar Seat C (General-Women).' },
+  { name: 'Sachin Dodke', seat: 'D', designation: 'Nagar Sevak (Corporator)', party: 'BJP', notes: 'PMC 2026 election, Ward 32 Warje-Popularnagar Seat D (General).' },
+];
+
+function corporationCodeFor(l) {
+  return ((l.corporation || '').trim().toUpperCase() || (l.city === 'Pimpri-Chinchwad' ? 'PCMC' : 'PMC'));
+}
+
+// Regular polygon approximation of a circle (for legacy wards that lack an
+// official boundary yet). Returns [lat, lng] vertices.
+function circlePolygon(lat, lng, radiusM, steps = 16) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = (radiusM / R) * (180 / Math.PI);
+  const dLng = (radiusM / R) * (180 / Math.PI) / Math.max(0.01, Math.cos(toRad(lat)));
+  const pts = [];
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * 2 * Math.PI;
+    pts.push([lat + dLat * Math.cos(a), lng + dLng * Math.sin(a)]);
+  }
+  return pts;
+}
+
+async function upsertWardBoundary(wardId, ringPts) {
+  await query('DELETE FROM ward_boundaries WHERE ward_id = $1', [wardId]);
+  const ring = [...ringPts, ringPts[0]]; // close the ring (first == last)
+  for (let i = 0; i < ring.length; i++) {
+    await query(
+      `INSERT INTO ward_boundaries (ward_id, ring_idx, seq, lat, lng)
+       VALUES ($1, 0, $2, $3, $4)`,
+      [wardId, i, ring[i][0], ring[i][1]],
+    );
+  }
+}
 
 async function seedLocations() {
   for (const l of LOCATIONS) {
     await query(
       `INSERT INTO locations
-        (name, slug, city, area, lat, lng, radius_m, type, ward_no, officer_name, officer_role, officer_party, officer_phone, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
+        (name, slug, city, area, lat, lng, radius_m, type, ward_no, officer_name, officer_role, officer_party, officer_phone, corporation_code, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)
        ON CONFLICT (slug) DO UPDATE SET
          name = EXCLUDED.name, city = EXCLUDED.city, area = EXCLUDED.area,
          lat = EXCLUDED.lat, lng = EXCLUDED.lng, radius_m = EXCLUDED.radius_m,
          type = EXCLUDED.type, ward_no = EXCLUDED.ward_no,
          officer_name = EXCLUDED.officer_name, officer_role = EXCLUDED.officer_role,
          officer_party = EXCLUDED.officer_party,
-         officer_phone = EXCLUDED.officer_phone, is_active = true`,
+         officer_phone = EXCLUDED.officer_phone,
+         corporation_code = EXCLUDED.corporation_code,
+         is_active = true`,
       [
         l.name,
         l.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
@@ -114,6 +183,7 @@ async function seedLocations() {
         l.role,
         l.party,
         l.phone,
+        corporationCodeFor(l),
       ],
     );
   }
@@ -121,9 +191,14 @@ async function seedLocations() {
 }
 
 // Build the ward registry from the seeded localities: one ward per distinct
-// (city, ward_no), pointing its boundary at the first locality for that ward.
-// Runs every seed so the registry always matches the locality set.
+// (city, ward_no), pointing its boundary at the first locality for that ward
+// and inheriting its corporation. Each ward gets a boundary polygon: the
+// explicit official ring where one is defined, else a regular-polygon
+// approximation of the boundary locality's circle. Runs every seed so the
+// registry + boundaries always match the locality set.
 async function seedWards() {
+  const corpRows = await query('SELECT id, code FROM corporations WHERE is_active = true');
+  const corpIdByCode = new Map(corpRows.rows.map((c) => [c.code, c.id]));
   const { rows } = await query(
     `SELECT * FROM locations
       WHERE is_active = true AND slug NOT LIKE '@%' AND ward_no <> ''
@@ -134,16 +209,55 @@ async function seedWards() {
     const key = `${l.city}||${l.ward_no}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    const corporationId = corpIdByCode.get(corporationCodeFor(l)) || null;
     await query(
-      `INSERT INTO wards (city, ward_number, ward_name, boundary_locality_id)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO wards (city, ward_number, ward_name, boundary_locality_id, corporation_id, source)
+       VALUES ($1, $2, $3, $4, $5, 'seed_approximation')
        ON CONFLICT (city, ward_number) DO UPDATE SET
          ward_name = EXCLUDED.ward_name,
-         boundary_locality_id = COALESCE(wards.boundary_locality_id, EXCLUDED.boundary_locality_id)`,
-      [l.city, l.ward_no, l.name, l.id],
+         boundary_locality_id = COALESCE(wards.boundary_locality_id, EXCLUDED.boundary_locality_id),
+         corporation_id = COALESCE(wards.corporation_id, EXCLUDED.corporation_id),
+         source = CASE WHEN wards.source = '' THEN EXCLUDED.source ELSE wards.source END`,
+      [l.city, l.ward_no, l.name, l.id, corporationId],
     );
+    const ward = (await query('SELECT * FROM wards WHERE city = $1 AND ward_number = $2', [l.city, l.ward_no])).rows[0];
+    const ring = WARD_BOUNDARIES[key] || circlePolygon(l.lat, l.lng, l.radius_m, 16);
+    await upsertWardBoundary(ward.id, ring);
   }
   logger.info(`Seeded ${seen.size} wards from localities.`);
+}
+
+// Verified elected representatives for PMC Ward 32 (Warje-Popularnagar) from
+// the 2026 election. Runs regardless of DEMO_MODE — this is real, sourced data.
+async function seedVerifiedWard32() {
+  const corp = (await query("SELECT id FROM corporations WHERE code = 'PMC'")).rows[0];
+  const ward = (await query("SELECT id FROM wards WHERE city = 'Pune' AND ward_number = 'Ward 32'")).rows[0];
+  if (!corp || !ward) return;
+  for (const rep of WARD_32_REPS) {
+    const existing = (await query(
+      `SELECT id FROM representatives WHERE name = $1 AND seat = $2 AND data_source = 'pune_2026_election' LIMIT 1`,
+      [rep.name, rep.seat],
+    )).rows[0];
+    let repId = existing?.id;
+    if (!repId) {
+      const ins = await query(
+        `INSERT INTO representatives
+           (name, designation, constituency, party, seat, corporation_id, data_source, notes, is_current, x_verified_by_admin)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pune_2026_election', $7, true, false)
+         RETURNING id`,
+        [rep.name, rep.designation, 'Warje-Popularnagar', rep.party, rep.seat, corp.id, rep.notes],
+      );
+      repId = ins.rows[0].id;
+    }
+    await query(
+      `INSERT INTO ward_representatives (ward_id, representative_id, seat, is_current)
+       VALUES ($1, $2, $3, true)
+       ON CONFLICT (ward_id, representative_id) DO UPDATE SET
+         seat = EXCLUDED.seat, is_current = true`,
+      [ward.id, repId, rep.seat],
+    );
+  }
+  logger.info(`Seeded ${WARD_32_REPS.length} verified representatives for PMC Ward 32 (Warje-Popularnagar).`);
 }
 
 // DEMO ONLY: clearly-marked placeholder representatives so the escalation UI is
@@ -527,6 +641,7 @@ export async function seedDatabase(options = {}) {
 
   await seedLocations();
   await seedWards();
+  await seedVerifiedWard32();
 
   if (!env.demoMode) {
     return { seeded: false, issues: 0, note: 'Demo seeding is disabled (DEMO_MODE=false)' };

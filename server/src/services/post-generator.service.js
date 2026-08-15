@@ -58,17 +58,22 @@ function truncate(text, max) {
  * @param {object} params.issue        Full issue row
  * @param {object|null} params.category Category row (name)
  * @param {object|null} params.ward     Ward row (ward_number)
- * @param {object|null} params.representative  Picked representative (canEscalate true)
+ * @param {object|null} params.representative  Picked representative (primary)
+ * @param {string[]} [params.mentions] Admin-verified X handles to @mention
+ *        (computed by representative resolution + escalation tag rule). Only
+ *        these handles are ever allowed into a post.
  * @param {'report'|'resolution'} [params.postType] Type of post
  * @param {object|null} [params.resolution] Resolution context for resolution posts
  */
-export function generateXPost({ issue, category, ward, representative, postType = 'report', resolution = null }) {
-  const rep = representative || {};
-  const canEscalate =
-    rep.canEscalate ?? (!!rep.x_verified_by_admin && !!rep.official_x_username);
+export function generateXPost({ issue, category, ward, representative, representatives = [], mentions = [], postType = 'report', resolution = null }) {
+  const mentionUsernames = [...new Set(
+    (mentions || [])
+      .map((m) => (m || '').trim().replace(/^@/, ''))
+      .filter(Boolean),
+  )];
   const mention =
-    postType === 'report' && canEscalate && rep.official_x_username
-      ? `@${rep.official_x_username.replace(/^@/, '')} `
+    postType === 'report' && mentionUsernames.length
+      ? `${mentionUsernames.map((u) => `@${u}`).join(' ')} `
       : '';
   const categoryName = category?.name || '';
   const areaParts = [issue.area, issue.city].filter(Boolean);
@@ -115,7 +120,7 @@ export function generateXPost({ issue, category, ward, representative, postType 
     text,
     charCount: text.length,
     fits: text.length <= POST_LIMIT,
-    mentions: [mention.trim().replace(/^@/, '').replace(/:$/, '')].filter(Boolean),
+    mentions: mentionUsernames,
     hashtags: HASHTAGS,
     postType,
   };

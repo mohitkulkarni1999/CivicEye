@@ -12,6 +12,10 @@ import {
   adminListWards,
   adminCreateWard,
   adminUpdateWard,
+  adminListCorporations,
+  adminGetEscalationTagRule,
+  adminSetEscalationTagRule,
+  adminSetWardBoundaryGeoJSON,
 } from '../controllers/representative.controller.js';
 import {
   listEscalationsAdmin,
@@ -68,10 +72,18 @@ router.post('/representatives', asyncHandler(adminCreateRepresentative));
 router.patch('/representatives/:id', asyncHandler(adminUpdateRepresentative));
 router.post('/representatives/:id/verify-x', asyncHandler(adminVerifyRepresentativeX));
 
+// Municipal corporations
+router.get('/corporations', asyncHandler(adminListCorporations));
+
+// Escalation behaviour
+router.get('/settings/escalation-tag-rule', asyncHandler(adminGetEscalationTagRule));
+router.put('/settings/escalation-tag-rule', asyncHandler(adminSetEscalationTagRule));
+
 // Wards
 router.get('/wards', asyncHandler(adminListWards));
 router.post('/wards', asyncHandler(adminCreateWard));
 router.patch('/wards/:id', asyncHandler(adminUpdateWard));
+router.post('/wards/:id/boundary', asyncHandler(adminSetWardBoundaryGeoJSON));
 
 // X escalations
 router.get('/escalations', asyncHandler(listEscalationsAdmin));

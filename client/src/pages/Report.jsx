@@ -754,25 +754,32 @@ export default function Report() {
                 <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-ink-400">Who leads this area</p>
                 {officialLoading ? (
                   <div className="flex items-center gap-2 text-sm text-ink-500"><Spinner /> Looking up responsible ward official…</div>
-                ) : electedRep?.matched && electedRep.representative ? (
+                ) : electedRep?.matched && (electedRep.representative || (electedRep.representatives || []).length > 0) ? (
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-base font-black text-ink-900">{electedRep.representative.name}</p>
-                      <p className="text-sm font-semibold text-brand-700">{electedRep.representative.designation}</p>
+                      <p className="text-base font-black text-ink-900">
+                        {(electedRep.representatives || []).map((r) => r.name).join(', ')}
+                      </p>
+                      <p className="text-sm font-semibold text-brand-700">
+                        {electedRep.representative?.designation || 'Nagar Sevak (Corporator)'}
+                      </p>
                       <p className="mt-0.5 text-xs text-ink-500">
                         {area || electedRep.locality?.name || 'Local Area'}
                         {electedRep.ward?.ward_number ? ` · ${electedRep.ward.ward_number}` : ''}
-                        {electedRep.representative.constituency ? ` · ${electedRep.representative.constituency}` : ''}
+                        {electedRep.ward?.ward_name ? ` · ${electedRep.ward.ward_name}` : ''}
+                        {electedRep.corporation?.code ? ` · ${electedRep.corporation.code}` : ''}
                       </p>
-                      {electedRep.representative.official_x_username ? (
-                        <a href={electedRep.representative.x_profile_url} target="_blank" rel="noreferrer" className="mt-1.5 inline-block text-sm font-semibold text-ink-800 hover:text-brand-700">
-                          @{electedRep.representative.official_x_username}
-                        </a>
-                      ) : (
-                        <span className="mt-1.5 inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">
-                          {electedRep.representative.designation || 'Elected Ward Member'}
-                        </span>
-                      )}
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {(electedRep.representatives || []).map((r) => (
+                          <span key={r.id} className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">
+                            {r.party ? <span>{r.party}</span> : null}
+                            {r.seat ? <span>({r.seat})</span> : null}
+                            {r.official_x_username && r.x_verified_by_admin ? (
+                              <a href={r.x_profile_url} target="_blank" rel="noreferrer" className="hover:underline">@{r.official_x_username}</a>
+                            ) : null}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                     <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-700">
                       <CheckIcon size={11} /> Verified

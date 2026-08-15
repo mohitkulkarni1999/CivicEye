@@ -154,7 +154,15 @@ export async function maybeCreateReportEscalation({ issue, category, postType = 
     });
 
     if (resolved.canEscalate) {
-      const generated = generateXPost({ issue, category, ward: resolved.ward, representative: resolved.representative, postType });
+      const generated = generateXPost({
+        issue,
+        category,
+        ward: resolved.ward,
+        representative: resolved.representative,
+        representatives: resolved.representatives,
+        mentions: resolved.mentions || [],
+        postType,
+      });
       await pool.query(
         `UPDATE issue_escalations SET status = 'READY', generated_text = $1 WHERE id = $2`,
         [generated.text, escalation.id],

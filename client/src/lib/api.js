@@ -75,6 +75,9 @@ export const representativeApi = {
   create: (body) => http.post('/api/admin/representatives', body),
   update: (id, body) => http.patch(`/api/admin/representatives/${id}`, body),
   verifyX: (id, verified) => http.post(`/api/admin/representatives/${id}/verify-x`, { verified }),
+  corporations: () => http.get('/api/admin/corporations'),
   wards: () => http.get('/api/admin/wards'),
   linkWard: (wardId, representativeId) => http.patch(`/api/admin/wards/${wardId}`, { representativeId }),
+  tagRule: () => http.get('/api/admin/settings/escalation-tag-rule'),
+  setTagRule: (value) => http.put('/api/admin/settings/escalation-tag-rule', { value }),
 };

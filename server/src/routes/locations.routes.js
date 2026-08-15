@@ -3,7 +3,6 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { reverseGeocode } from '../services/geo.service.js';
 import {
   findLocality,
-  findNearestLocality,
   getLocalityById,
   identifyLocalityOfficial,
   listLocalities,
@@ -22,18 +21,18 @@ router.get(
       return res.status(400).json({ error: 'lat and lng query params are required' });
     }
     const geo = await reverseGeocode(lat, lng);
+    // ONLY a circle that actually contains the point is a real locality match.
+    // The nearest-locality fallback is deliberately NOT used here: assigning a
+    // point to the nearest seeded locality regardless of jurisdiction is what
+    // caused Warje (PMC) to show Karve Nagar's Ward 10 / Neeta Gupte.
     const locality = await findLocality(lat, lng);
-    const nearest = locality || (await findNearestLocality(lat, lng));
     res.json({
-      address:
-        geo.address.startsWith('Near ') && nearest?.name
-          ? `${nearest.name} area`
-          : geo.address,
-      area: locality?.name || geo.area || nearest?.name || '',
+      address: geo.address,
+      area: locality?.name || geo.area || '',
       landmark:
         geo.landmark ||
-        (nearest?.ward_no && !geo.area ? `${nearest.name} — Ward ${nearest.ward_no}` : ''),
-      city: locality?.city || geo.city || nearest?.city || '',
+        (locality?.ward_no && !geo.area ? `${locality.name} — Ward ${locality.ward_no}` : ''),
+      city: locality?.city || geo.city || '',
       locality: locality
         ? {
             id: locality.id,
@@ -42,16 +41,7 @@ router.get(
             type: locality.type,
             ward_no: locality.ward_no,
           }
-        : nearest
-          ? {
-              id: nearest.id,
-              name: nearest.name,
-              slug: nearest.slug,
-              type: nearest.type,
-              ward_no: nearest.ward_no,
-              approximate: true,
-            }
-          : null,
+        : null,
       source: geo.source,
     });
   }),
@@ -83,7 +73,8 @@ router.get(
   }),
 );
 
-// GET /api/locations/lookup?lat=..&lng=.. — find the locality containing a point (or nearest)
+// GET /api/locations/lookup?lat=..&lng=.. — find the locality containing a point.
+// No nearest-locality fallback (see /reverse): out-of-circle points are null.
 router.get(
   '/lookup',
   asyncHandler(async (req, res) => {
@@ -92,7 +83,7 @@ router.get(
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       return res.status(400).json({ error: 'lat and lng query params are required' });
     }
-    const loc = (await findLocality(lat, lng)) || (await findNearestLocality(lat, lng));
+    const loc = await findLocality(lat, lng);
     if (!loc) return res.json({ match: null });
     const { officer_phone, ...match } = loc;
     res.json({ match: { ...match, type_label: LOCALITY_TYPE_LABELS[loc.type] || loc.type } });

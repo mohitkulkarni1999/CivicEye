@@ -65,25 +65,55 @@ seeded** — register them from the signup page.
   ```
 
 - **Wards** are seeded idempotently from the locality data (one ward per
-  `(city, ward_no)`), and demo representatives are seeded **only** when
-  `DEMO_MODE=true` (clearly marked, with no X usernames).
+  `(city, ward_no)`, with a boundary ring generated from the locality radius),
+  and demo representatives are seeded **only** when `DEMO_MODE=true` (clearly
+  marked, with no X usernames).
+- PMC **Ward 32 (Warje-Popularnagar)** is seeded with its official 2026 election
+  boundary polygon and the four elected corporators (Harshada Bhosale,
+  Bharatbhushan Barate, Sayali Wanjale, Sachin Dodke — verified via election
+  coverage, `data_source = 'pune_2026_election'`, no X handles until the admin
+  adds and verifies them). Warje points therefore resolve to **PMC Ward 32** —
+  never to the neighbouring Karve Nagar ward. Ward boundaries are managed under
+  **Admin → Representatives** (paste rings or GeoJSON).
 
 ## Elected representative & X escalation
 
 When a report is created, the platform deterministically resolves the current
-elected representative (Nagar Sevak / Corporator) for that location —
+elected representative(s) (Nagar Sevak / Corporator) for that location —
 **no AI guessing, no fake handles**:
 
-1. Locality nearest to the report point (within its radius) is found.
-2. That locality is mapped to a **ward** (via `boundary_locality_id`, else
-   `city + ward_no`).
-3. The ward's **current representative** (`is_current = true`) is attached to
-   the issue and shown on the report page.
-4. If the representative's X account has been **admin-verified**
+1. The report point is tested against official **ward boundary polygons**
+   (pure-SQL ray casting over `ward_boundaries` ring points — no PostGIS
+   required). The point resolves to the enclosing ward + **municipal
+   corporation** (PMC / PCMC / …).
+2. If no polygon contains the point, a fallback uses the nearest locality
+   within its radius, mapped via `boundary_locality_id` (else `city + ward_no`).
+3. The ward's **current representatives** (`ward_representatives` join, filtered
+   to `is_current = true`) are attached to the issue; the primary one (ward's
+   `representative_id`) is set as `officer_name` on the issue.
+4. If the representatives' X accounts have been **admin-verified**
    (`x_verified_by_admin` + username), an escalation is drafted (`READY`).
 
-Ambiguity guard: if a different active ward is within a 150 m margin the system
-refuses to guess (`WARD_AMBIGUOUS`) rather than risk mis-attributing.
+Guards — the system **refuses to guess** rather than risk mis-attribution:
+
+- **`WARD_AMBIGUOUS`** — the point falls inside more than one ward of the same
+  corporation (overlapping seed boundaries) or within a 150 m margin of another
+  active ward.
+- **`CORPORATION_MISMATCH`** — the point falls inside wards of different
+  corporations (e.g. a PMC polygon and a PCMC polygon overlap). This is
+  jurisdictionally impossible, so it is never auto-picked.
+- Representatives without an admin-verified X account resolve cleanly
+  (`X_NOT_VERIFIED`) but never auto-escalate.
+
+### Who gets @mentioned on X
+
+Admin-configurable under **Admin → Representatives** (`app_settings`
+`escalation_tag_rule`):
+
+- `TAG_SELECTED_REPRESENTATIVE` (default) — only the primary/selected rep.
+- `TAG_ALL_WARD_REPRESENTATIVES` — every current, verified rep of the ward.
+
+Both honor the verified-X gate and the 280-character limit.
 
 ### Escalation lifecycle
 

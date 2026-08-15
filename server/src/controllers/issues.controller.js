@@ -232,7 +232,7 @@ export const getIssue = asyncHandler(async (req, res) => {
     throw ApiError.notFound('Issue not found');
   }
 
-  const [catRes, deptRes, imgRes, hist, confRes, voteRes, commentRes, evidenceRes, aiRes, reporterRes, repRes, escRes] =
+  const [catRes, deptRes, imgRes, hist, confRes, voteRes, commentRes, evidenceRes, aiRes, reporterRes, repRes, escRes, wardRes, repsRes, corpRes] =
     await Promise.all([
       pool.query('SELECT * FROM categories WHERE id = $1', [issue.category_id]),
       pool.query('SELECT * FROM departments WHERE id = $1', [issue.department_id]),
@@ -289,6 +289,28 @@ export const getIssue = asyncHandler(async (req, res) => {
           WHERE e.issue_id = $1 ORDER BY e.created_at ASC`,
         [issue.id],
       ),
+      issue.ward_id
+        ? pool.query(
+            `SELECT w.*, c.code AS corporation_code, c.name AS corporation_name
+               FROM wards w
+               LEFT JOIN corporations c ON c.id = w.corporation_id
+              WHERE w.id = $1`,
+            [issue.ward_id],
+          )
+        : Promise.resolve({ rows: [] }),
+      issue.ward_id
+        ? pool.query(
+            `SELECT wr.seat, wr.is_current AS ward_current, r.*
+               FROM ward_representatives wr
+               JOIN representatives r ON r.id = wr.representative_id
+              WHERE wr.ward_id = $1 AND wr.is_current = true AND r.is_current = true
+              ORDER BY wr.seat = '' ASC, wr.seat ASC, r.name ASC`,
+            [issue.ward_id],
+          )
+        : Promise.resolve({ rows: [] }),
+      issue.corporation_id
+        ? pool.query('SELECT * FROM corporations WHERE id = $1', [issue.corporation_id])
+        : Promise.resolve({ rows: [] }),
     ]);
 
   const comments = commentRes.rows.map((c) => ({
@@ -330,6 +352,29 @@ export const getIssue = asyncHandler(async (req, res) => {
       evidence: evidenceRes.rows,
       aiAnalyses: aiRes.rows,
       representative: repRes.rows[0] ? pickRepresentative(repRes.rows[0]) : null,
+      representatives: repsRes.rows.map((r) => ({
+        ...pickRepresentative(r),
+        seat: r.seat,
+        ward_current: r.ward_current,
+      })),
+      ward: wardRes.rows[0]
+        ? {
+            id: wardRes.rows[0].id,
+            city: wardRes.rows[0].city,
+            ward_number: wardRes.rows[0].ward_number,
+            ward_name: wardRes.rows[0].ward_name,
+            corporation: wardRes.rows[0].corporation_id
+              ? {
+                  id: wardRes.rows[0].corporation_id,
+                  code: wardRes.rows[0].corporation_code,
+                  name: wardRes.rows[0].corporation_name,
+                }
+              : null,
+          }
+        : null,
+      corporation: corpRes.rows[0]
+        ? { id: corpRes.rows[0].id, code: corpRes.rows[0].code, name: corpRes.rows[0].name }
+        : null,
       escalations: escRes.rows.map((e) => pickEscalation(e)),
       daysOpen,
       confirmedByMe,
@@ -373,15 +418,24 @@ export const createIssue = asyncHandler(async (req, res) => {
   // Elected representative for this point (deterministic, never AI).
   const resolved = await resolveRepresentativeForPoint(b.lat, b.lng);
 
+  // Officer fields reflect the VERIFIED resolution, not the legacy locality
+  // record — a locality's cached officer can never hijack a point's ward.
+  const resolvedRep = resolved.representative;
+  const officerName = resolvedRep?.name || locality?.officer_name || '';
+  const officerRole = resolvedRep?.designation || locality?.officer_role || '';
+  const officerParty = resolvedRep?.party || locality?.officer_party || '';
+  const officerPhone = resolvedRep ? '' : locality?.officer_phone || '';
+  const wardNo = resolved.ward?.ward_number || locality?.ward_no || '';
+
   const issue = await withTransaction(async (client) => {
     const { rows } = await client.query(
       `INSERT INTO issues
         (reporter_id, is_anonymous, category_id, title, description, status, severity,
          lat, lng, address, area, city, landmark, confidence, is_demo,
          locality_id, locality_type, ward_no, officer_name, officer_role, officer_phone, officer_party,
-         representative_id)
+         representative_id, corporation_id, ward_id, resolution_source, resolution_confidence)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, false,
-               $15, $16, $17, $18, $19, $20, $21, $22)
+               $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
        RETURNING *`,
       [
         userId,
@@ -400,12 +454,16 @@ export const createIssue = asyncHandler(async (req, res) => {
         b.confidence ?? aiAnalysis?.confidence ?? 0,
         localityId,
         locality?.type ?? '',
-        locality?.ward_no ?? '',
-        locality?.officer_name ?? '',
-        locality?.officer_role ?? '',
-        locality?.officer_phone ?? '',
-        locality?.officer_party ?? '',
-        resolved.matched ? resolved.representative.id : null,
+        wardNo,
+        officerName,
+        officerRole,
+        officerPhone,
+        officerParty,
+        resolvedRep?.id ?? null,
+        resolved.corporation?.id ?? null,
+        resolved.ward?.id ?? null,
+        resolved.source ?? '',
+        resolved.confidence ?? '',
       ],
     );
     const created = rows[0];

@@ -843,7 +843,9 @@ function ImportCsv() {
 function Representatives() {
   const [reps, setReps] = useState([]);
   const [wards, setWards] = useState([]);
-  const [form, setForm] = useState({ name: '', designation: '', constituency: '', official_x_username: '', is_current: true, x_verified_by_admin: false });
+  const [corporations, setCorporations] = useState([]);
+  const [tagRule, setTagRule] = useState('TAG_SELECTED_REPRESENTATIVE');
+  const [form, setForm] = useState({ name: '', designation: '', constituency: '', official_x_username: '', party: '', seat: '', corporation_id: '', is_current: true, x_verified_by_admin: false });
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState({ type: '', text: '' });
   const toast = useToast();
@@ -852,10 +854,14 @@ function Representatives() {
     Promise.all([
       representativeApi.list({ includeInactive: true }),
       representativeApi.wards(),
+      representativeApi.corporations(),
+      representativeApi.tagRule(),
     ])
-      .then(([r, w]) => {
+      .then(([r, w, c, t]) => {
         setReps(r.representatives || []);
         setWards(w.wards || []);
+        setCorporations(c.corporations || []);
+        setTagRule(t.value || 'TAG_SELECTED_REPRESENTATIVE');
       })
       .catch(() => {});
   useEffect(() => { load(); }, []);
@@ -869,14 +875,27 @@ function Representatives() {
         designation: form.designation || 'Nagar Sevak (Corporator)',
         constituency: form.constituency,
         official_x_username: form.official_x_username,
+        party: form.party,
+        seat: form.seat,
+        corporation_id: form.corporation_id || undefined,
         is_current: form.is_current,
         x_verified_by_admin: form.x_verified_by_admin,
       });
-      setForm({ name: '', designation: '', constituency: '', official_x_username: '', is_current: true, x_verified_by_admin: false });
+      setForm({ name: '', designation: '', constituency: '', official_x_username: '', party: '', seat: '', corporation_id: '', is_current: true, x_verified_by_admin: false });
       toast.success('Representative created');
       load();
     } catch (err) {
       setMsg({ type: 'error', text: err.message });
+    }
+  };
+
+  const changeTagRule = async (value) => {
+    try {
+      await representativeApi.setTagRule(value);
+      setTagRule(value);
+      toast.success('Tag rule updated');
+    } catch (err) {
+      toast.error(err.message);
     }
   };
 
@@ -920,6 +939,23 @@ function Representatives() {
 
   return (
     <div className="space-y-6">
+      <div className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-ink-900">Who gets @mentioned on X</h3>
+            <p className="text-sm text-ink-500">Controls which verified representatives are tagged when a report escalates.</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => changeTagRule('TAG_SELECTED_REPRESENTATIVE')} className={`badge px-3 py-1.5 text-xs font-bold ${tagRule === 'TAG_SELECTED_REPRESENTATIVE' ? 'bg-blue-900 text-white' : 'bg-ink-100 text-ink-500'}`}>
+              Primary representative only
+            </button>
+            <button onClick={() => changeTagRule('TAG_ALL_WARD_REPRESENTATIVES')} className={`badge px-3 py-1.5 text-xs font-bold ${tagRule === 'TAG_ALL_WARD_REPRESENTATIVES' ? 'bg-blue-900 text-white' : 'bg-ink-100 text-ink-500'}`}>
+              All ward representatives
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="card overflow-x-auto">
           <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
@@ -929,6 +965,7 @@ function Representatives() {
             <thead className="bg-ink-100 text-left text-xs text-ink-500">
               <tr>
                 <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Party / Seat</th>
                 <th className="px-4 py-3">X</th>
                 <th className="px-4 py-3">Verified</th>
                 <th className="px-4 py-3">Current</th>
@@ -940,7 +977,11 @@ function Representatives() {
                   <td className="px-4 py-3">
                     <p className="font-medium text-ink-900">{r.name}</p>
                     <p className="text-xs text-ink-400">{r.designation}{r.ward_number ? ` · ${r.ward_number}` : ''}</p>
+                    {r.corporation_code && <span className="badge mt-1 bg-blue-50 text-blue-700">{r.corporation_code}</span>}
                     {r.data_source === 'demo_seed' && <span className="badge bg-amber-100 text-amber-700">demo</span>}
+                  </td>
+                  <td className="px-4 py-3 text-ink-600">
+                    {r.party || '—'}{r.seat ? ` (${r.seat})` : ''}
                   </td>
                   <td className="px-4 py-3 text-ink-600">
                     {r.official_x_username ? `@${r.official_x_username}` : <span className="text-ink-300">—</span>}
@@ -958,7 +999,7 @@ function Representatives() {
                 </tr>
               ))}
               {reps.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-ink-400">No representatives yet.</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-400">No representatives yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -983,7 +1024,26 @@ function Representatives() {
             </div>
             <div>
               <label className="label">Constituency / ward</label>
-              <input value={form.constituency} onChange={(e) => setForm({ ...form, constituency: e.target.value })} className="input" placeholder="e.g. Ward 21, Wakad" />
+              <input value={form.constituency} onChange={(e) => setForm({ ...form, constituency: e.target.value })} className="input" placeholder="e.g. Ward 32, Warje-Popularnagar" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Party</label>
+                <input value={form.party} onChange={(e) => setForm({ ...form, party: e.target.value })} className="input" placeholder="BJP / NCP / INC / —" />
+              </div>
+              <div>
+                <label className="label">Seat</label>
+                <input value={form.seat} onChange={(e) => setForm({ ...form, seat: e.target.value })} className="input" placeholder="A / B / C / D" />
+              </div>
+            </div>
+            <div>
+              <label className="label">Corporation</label>
+              <select value={form.corporation_id} onChange={(e) => setForm({ ...form, corporation_id: e.target.value })} className="input">
+                <option value="">— Not specified —</option>
+                {corporations.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="label">X username</label>
@@ -1011,6 +1071,7 @@ function Representatives() {
           <thead className="bg-ink-100 text-left text-xs text-ink-500">
             <tr>
               <th className="px-4 py-3">Ward</th>
+              <th className="px-4 py-3">Corporation</th>
               <th className="px-4 py-3">Boundary locality</th>
               <th className="px-4 py-3">Representative</th>
             </tr>
@@ -1022,24 +1083,30 @@ function Representatives() {
                   <p className="font-medium text-ink-900">{w.ward_number}</p>
                   <p className="text-xs text-ink-400">{w.ward_name || w.city}</p>
                 </td>
+                <td className="px-4 py-3">
+                  {w.corporation_code ? <span className="badge bg-blue-50 text-blue-700">{w.corporation_code}</span> : <span className="text-ink-300">—</span>}
+                </td>
                 <td className="px-4 py-3 text-ink-500">{w.locality_name || '—'}</td>
                 <td className="px-4 py-3">
-                  <select
-                    value={w.representative_id || ''}
-                    onChange={(e) => assignWard(w.id, e.target.value)}
-                    disabled={busy === `ward-${w.id}`}
-                    className="input max-w-xs py-1.5 text-sm"
-                  >
-                    <option value="">— No representative —</option>
-                    {reps.map((r) => (
-                      <option key={r.id} value={r.id}>{r.name}{r.official_x_username ? ` (@${r.official_x_username})` : ''}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={w.representative_id || ''}
+                      onChange={(e) => assignWard(w.id, e.target.value)}
+                      disabled={busy === `ward-${w.id}`}
+                      className="input max-w-xs py-1.5 text-sm"
+                    >
+                      <option value="">— No representative —</option>
+                      {reps.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}{r.official_x_username ? ` (@${r.official_x_username})` : ''}</option>
+                      ))}
+                    </select>
+                    {w.representative_count > 1 && <span className="badge bg-emerald-100 text-emerald-700">{w.representative_count} reps</span>}
+                  </div>
                 </td>
               </tr>
             ))}
             {wards.length === 0 && (
-              <tr><td colSpan={3} className="px-4 py-8 text-center text-ink-400">No wards seeded yet. Run seedWards in the server seed.</td></tr>
+              <tr><td colSpan={4} className="px-4 py-8 text-center text-ink-400">No wards seeded yet. Run seedWards in the server seed.</td></tr>
             )}
           </tbody>
         </table>

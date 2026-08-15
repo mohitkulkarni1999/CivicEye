@@ -278,7 +278,6 @@ export default function IssueDetail() {
 
   const resolved = ['RESOLVED', 'VERIFIED_RESOLVED'].includes(issue.status);
   const reportEsc = issue.escalations?.find((e) => e.post_type === 'report') || issue.escalations?.[0] || null;
-  const wardNoLabel = (issue.ward_no || '').replace(/^ward\s*/i, '');
 
   return (
     <div className="container-page max-w-6xl py-8">
@@ -435,7 +434,7 @@ export default function IssueDetail() {
                 <p className="mt-1 text-base font-bold text-ink-900">{issue.officer_name}</p>
                 <p className="text-sm font-medium text-brand-700">{issue.officer_role}</p>
                 <p className="mt-0.5 text-xs text-ink-600">
-                  {[issue.ward_no, issue.area, issue.city].filter(Boolean).join(' · ') || '—'}
+                  {[issue.ward_no, issue.area, issue.city, issue.corporation?.code].filter(Boolean).join(' · ') || '—'}
                 </p>
                 {issue.officer_party && (
                   <p className="mt-1 inline-block rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-800">
@@ -445,13 +444,18 @@ export default function IssueDetail() {
               </div>
             )}
 
-            {issue.representative && (
+            {(issue.representatives?.length > 0 || issue.representative) && (
               <div className="mt-4 rounded-2xl border border-ink-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                    Concerned elected representative
+                    Concerned elected representatives
                   </p>
-                  {issue.representative.x_verified_by_admin && issue.representative.official_x_username ? (
+                  {issue.corporation?.code && (
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">
+                      {issue.corporation.code}
+                    </span>
+                  )}
+                  {issue.representatives?.some((r) => r.x_verified_by_admin && r.official_x_username) ? (
                     <span className="ml-auto flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
                       <CheckIcon size={11} className="text-emerald-600" /> X verified
                     </span>
@@ -461,26 +465,33 @@ export default function IssueDetail() {
                     </span>
                   )}
                 </div>
-                <p className="mt-1.5 text-base font-bold text-ink-900">{issue.representative.name}</p>
-                <p className="text-sm font-medium text-brand-700">{issue.representative.designation}</p>
-                <p className="mt-0.5 text-xs text-ink-600">
-                  {[
-                    issue.representative.constituency,
-                    wardNoLabel ? `Ward ${wardNoLabel}` : null,
-                    issue.area,
-                    issue.city,
-                  ].filter(Boolean).join(' · ') || '—'}
-                </p>
-                {issue.representative.official_x_username && (
-                  <a
-                    href={issue.representative.x_profile_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-ink-800 hover:text-brand-700"
-                  >
-                    <LinkIcon size={14} className="text-brand-600" /> @{issue.representative.official_x_username}
-                  </a>
-                )}
+                {(issue.representatives || [issue.representative].filter(Boolean)).map((r) => (
+                  <div key={r.id} className="mt-2 flex items-start justify-between gap-2 rounded-xl bg-ink-50/60 p-2.5">
+                    <div>
+                      <p className="text-sm font-bold text-ink-900">
+                        {r.name}
+                        {r.seat ? <span className="ml-1.5 rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-bold text-ink-500">Seat {r.seat}</span> : null}
+                      </p>
+                      <p className="text-xs font-medium text-brand-700">{r.designation}</p>
+                      <p className="mt-0.5 text-xs text-ink-600">
+                        {[
+                          r.constituency,
+                          issue.ward?.ward_number,
+                          issue.area,
+                          issue.city,
+                        ].filter(Boolean).join(' · ') || '—'}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      {r.party && <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-bold text-ink-700">{r.party}</span>}
+                      {r.official_x_username && (
+                        <a href={r.x_profile_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-ink-800 hover:text-brand-700">
+                          <LinkIcon size={12} className="text-brand-600" /> @{r.official_x_username}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 

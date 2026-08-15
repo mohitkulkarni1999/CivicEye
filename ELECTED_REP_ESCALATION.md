@@ -32,55 +32,83 @@ Flow — `resolveRepresentativeForPoint(lat, lng)` in
 point (lat, lng)
    │
    ▼
-1. findCandidates()          every active locality whose circle contains the point,
-                             sorted by distance (nearest first)
+1. findBoundaryHit()          every ward whose boundary polygon (outer ring +
+                              holes, pure-SQL ray casting) contains the point
    │
    ▼
-2. best locality → ward     ward = wards where boundary_locality_id = locality.id
-                             └ fallback: wards where (city, ward_no) = locality.(city, ward_no)
+2. disambiguate               one hit   → that ward
+                              2+ hits   → same corporation? WARD_AMBIGUOUS
+                                           different corporations? CORPORATION_MISMATCH
+   │  (no polygon hit)
+   ▼
+3. locality fallback          every active locality whose circle contains the
+                              point, nearest first → ward (boundary_locality_id
+                              else city + ward_no); cross-corporation guard +
+                              150 m margin ambiguity guard still apply
    │
    ▼
-3. ward → representative    representatives where id = ward.representative_id
-                             (must have is_current = true)
+4. ward → representatives     current reps via ward_representatives join
+                              (is_current = true); primary = wards.representative_id
    │
    ▼
-4. result                   { matched, canEscalate, reason, confidence,
-                              locality, ward, representative }
+5. result                     { matched, canEscalate, reason, source, confidence,
+                               corporation, ward, representatives[], representative,
+                               mentions, tagRule }
 ```
 
-### Step 1 — locality candidates
+### Step 1 — official boundary polygons (primary)
 
-- Reads **all active localities** from the `locations` table.
-- Computes the haversine distance from the point to each locality centre.
-- Keeps only localities where `distance <= radius_m`.
-- Sorts by distance, nearest first.
+- Ward polygons live in `ward_boundaries` as plain `(lat, lng)` ring points
+  (ring 0 = outer ring, subsequent rings = holes). No PostGIS required.
+- `point_in_ring()` (ray casting) + `point_in_ward()` are plpgsql functions in
+  `server/src/db/schema.sql`; rings must be **closed** (first == last).
+- Only wards with a `corporation_id` are polygon-matched; other wards fall
+  through to the locality circle fallback.
 
-### Step 2 — locality → ward
+### Step 2 — disambiguation
 
-- If the locality was seeded with `boundary_locality_id` on its ward, use it.
-- Otherwise fall back to `city + ward_no` (both stored on the locality row).
-- Only `is_active = true` wards are considered.
+- One polygon hit → use that ward.
+- Multiple hits from the **same corporation** → `WARD_AMBIGUOUS` (overlapping
+  seed boundaries). We refuse to guess.
+- Multiple hits from **different corporations** → `CORPORATION_MISMATCH`. A
+  single point can never legally be in both PMC and PCMC, so this is a data
+  error and is never auto-picked.
 
-### Step 3 — ward → representative
+### Step 3 — locality circle fallback
 
-- `wards.representative_id` points at the current holder.
+- Only used when no polygon contains the point (legacy/approximation wards).
+- Computes haversine distance from the point to each active locality centre,
+  keeps `distance <= radius_m`, sorts nearest first.
+- Maps the best locality to a ward via `boundary_locality_id`, else
+  `city + ward_no`.
+- A fallback hit is **discarded** if the candidate ward's corporation differs
+  from a polygon hit's corporation.
+
+### Step 4 — ward → representatives
+
+- A ward can have **multiple current representatives** (seats A/B/C/D in the
+  2026 election system) through the `ward_representatives` join table.
+- `wards.representative_id` points at the primary holder (kept in sync by the
+  `sync_ward_primary_rep()` trigger).
 - Only representatives with `is_current = true` are ever returned.
 
-### Step 4 — result
+### Step 5 — result
 
 Every outcome is explicit via a `reason`:
 
 | reason | meaning |
 |---|---|
 | `OK` | matched, and X account is admin-verified → `canEscalate = true` |
-| `WARD_NOT_FOUND` | no locality circle contains the point |
+| `WARD_NOT_FOUND` | no locality circle contains the point (no polygon hit) |
 | `WARD_NOT_MAPPED` | locality found, but no ward registry row yet |
-| `WARD_AMBIGUOUS` | two different wards overlap the point → we refuse to guess |
-| `NO_REPRESENTATIVE` | ward exists but has no representative assigned |
+| `WARD_AMBIGUOUS` | two wards of the same corporation overlap the point → we refuse to guess |
+| `CORPORATION_MISMATCH` | wards of different corporations overlap the point → never auto-picked |
+| `NO_REPRESENTATIVE` | ward exists but has no current representative |
 | `REPRESENTATIVE_INACTIVE` | representative exists but `is_current = false` |
 | `X_NOT_VERIFIED` | representative matched but their X account is not admin-verified |
 
-`matched = true` **only** for `OK`.
+`matched = true` **only** for `OK` (and `X_NOT_VERIFIED` still returns the
+matched representatives for display, but never auto-escalates).
 
 ---
 
@@ -88,9 +116,15 @@ Every outcome is explicit via a `reason`:
 
 The single most important safety rule.
 
-After picking the nearest locality, we check every other candidate within a
-**150 m margin** of the nearest one. If that candidate belongs to a
-**different ward**, we return `WARD_AMBIGUOUS` instead of guessing.
+1. **Polygon overlap (same corporation)** — if the point falls inside more than
+   one ward of the same corporation (e.g. overlapping legacy seed polygons), we
+   return `WARD_AMBIGUOUS` instead of guessing.
+2. **Polygon overlap (different corporations)** — a point inside both a PMC and
+   a PCMC ward is jurisdictionally impossible; we return `CORPORATION_MISMATCH`
+   and attribute nothing.
+3. **Locality fallback margin** — after picking the nearest locality, we check
+   every other candidate within a **150 m margin** of the nearest one. If that
+   candidate belongs to a **different ward**, we return `WARD_AMBIGUOUS`.
 
 ```
 nearest locality .......... distance 20 m  → Ward 21
@@ -105,13 +139,15 @@ we say so.
 
 ### Confidence
 
-For matched/near-miss cases we also compute a confidence label from the ratio
-of the point's distance to the locality's radius:
+`source` records how the ward was found (`official_boundary` vs
+`locality_radius`), and `confidence` is computed from the polygon containment /
+distance ratio:
 
 ```
-ratio < 0.5  → high
-ratio < 0.9  → medium
-else         → low
+official_boundary hit  → high
+locality ratio < 0.5   → high
+locality ratio < 0.9   → medium
+else                   → low
 ```
 
 ---
@@ -121,10 +157,15 @@ else         → low
 - A report point resolves to a representative **before** the issue row is
   inserted, so `issues.representative_id` is written atomically with the report
   (`server/src/controllers/issues.controller.js`).
+- The issue also stores the resolved jurisdiction at report time:
+  `corporation_id`, `ward_id`, `resolution_source` and
+  `resolution_confidence`, so the attribution is auditable even if the
+  boundaries change later.
 - The same resolution is used to draft the escalation, so the report and its
   escalation can never disagree on the representative.
-- `GET /api/issues/:id` returns `representative` (public-safe shape) and the
-  `escalations[]` array.
+- `GET /api/issues/:id` returns `representative` (primary), `representatives[]`
+  (all current reps of the ward, public-safe shape), `ward` (number/name/
+  corporation) and `corporation`.
 
 ### Public-safe shapes
 
@@ -229,13 +270,19 @@ Before anything goes public, the citizen-supplied description is scrubbed:
 - **`#hashtags`** — stripped.
 - **Control characters / whitespace** — collapsed.
 
-The **only** `@mention` that can appear in the post is the verified
-representative's handle (and only on `report` posts):
+The **only** `@mention`s that can appear in the post are verified
+representative handles (and only on `report` posts). Which handles are tagged is
+driven by the admin-configurable `escalation_tag_rule`:
 
 ```
-if postType === 'report' AND representative is admin-verified AND has username:
-    mention = "@verifiedhandle "
+TAG_SELECTED_REPRESENTATIVE      → mention only the primary rep (default)
+TAG_ALL_WARD_REPRESENTATIVES     → mention every current, verified rep of the ward
 ```
+
+In both cases each rep is only included when it is admin-verified **and** has a
+username (`x_verified_by_admin` + `official_x_username`). The resolution result
+carries `mentions[]`, and `generateXPost()` builds the `@mention` prefix from
+that array (deduped, `@`-stripped).
 
 ### Deterministic composition
 
@@ -249,7 +296,7 @@ if postType === 'report' AND representative is admin-verified AND has username:
   post points back to the public record.
 - Hard **280-character cap**: truncation is deterministic (on word boundaries),
   never random, so the same input always produces the same post.
-- The rep handle + hashtags + URL are kept even when text is truncated —
+- The rep handles + hashtags + URL are kept even when text is truncated —
   citizen text is sacrificed first.
 
 ### Manual share (no X API)
@@ -282,7 +329,14 @@ No API keys, no auto-publishing of anything, ever. The `AUTO_X_POST` /
 ## 9. Seeding & data integrity
 
 - **Wards** (`seedWards`) — idempotent, one ward per `(city, ward_no)` created
-  from the existing locality data. Re-running never duplicates.
+  from the existing locality data, each with a **boundary ring** in
+  `ward_boundaries` (a 16-gon circle around the locality for legacy wards, or an
+  explicit polygon where real boundaries exist). Re-running never duplicates.
+- **PMC Ward 32 (Warje-Popularnagar)** — seeded with its official 2026 election
+  polygon and the **four elected corporators** (Harshada Bhosale, Bharatbhushan
+  Barate, Sayali Wanjale, Sachin Dodke) with `data_source = 'pune_2026_election'`
+  and **no X handles** — so nothing escalates until the admin adds and verifies
+  their X accounts. Warje points resolve to PMC Ward 32, never to Karve Nagar.
 - **Demo representatives** (`seedDemoRepresentatives`) — only when
   `DEMO_MODE=true`, clearly marked with `data_source = 'demo_seed'`, **never**
   given X usernames, so they can never be published. Uses `COALESCE` so
@@ -296,9 +350,10 @@ No API keys, no auto-publishing of anything, ever. The `AUTO_X_POST` /
 
 | failure | system behaviour |
 |---|---|
-| No locality near the point | `WARD_NOT_FOUND`; report saves normally, no escalation |
+| No polygon or locality near the point | `WARD_NOT_FOUND`; report saves normally, no escalation |
 | Ward not yet mapped | `WARD_NOT_MAPPED`; report saves, escalation waits for mapping |
-| Boundary ambiguity | `WARD_AMBIGUOUS`; nothing attributed, no guess |
+| Boundary ambiguity (same corp) | `WARD_AMBIGUOUS`; nothing attributed, no guess |
+| Cross-corporation overlap | `CORPORATION_MISMATCH`; nothing attributed — jurisdictionally impossible |
 | Representative not verified | `X_NOT_VERIFIED`; matched for display, no post drafted |
 | Post generation throws | caught + logged; escalation stays `PENDING`, report unaffected |
 | Officer from wrong department | `403`; action refused |
@@ -310,14 +365,15 @@ No API keys, no auto-publishing of anything, ever. The `AUTO_X_POST` /
 
 | file | role |
 |---|---|
-| `server/src/services/representative.service.js` | resolution + ambiguity guard + CRUD |
+| `server/src/services/representative.service.js` | polygon + fallback resolution, corporation gating, tag rule, CRUD |
 | `server/src/services/escalation.service.js` | state machine + lifecycle + drafts |
-| `server/src/services/post-generator.service.js` | sanitization + 280-char composer + share URL |
+| `server/src/services/post-generator.service.js` | sanitization + 280-char composer + share URL + mentions |
 | `server/src/services/audit.service.js` | audit-log writer |
-| `server/src/controllers/representative.controller.js` | public resolve + admin reps/wards handlers |
+| `server/src/controllers/representative.controller.js` | public resolve + admin reps/wards/corporations/tag-rule handlers |
 | `server/src/controllers/escalation.controller.js` | approve/reject/publish/retry/text + dept scope |
 | `server/src/controllers/issues.controller.js` | `createIssue` + `getIssue` integration |
 | `server/src/controllers/officer.controller.js` | resolution-post hook |
-| `server/src/db/schema.sql` | `representatives`, `wards`, `issue_escalations`, `audit_logs` tables |
-| `server/src/db/seed.js` | ward + demo-representative seeding |
-| `server/test/escalation.test.mjs` | end-to-end suite (40 steps) |
+| `server/src/db/schema.sql` | `corporations`, `wards`, `ward_boundaries`, `representatives`, `ward_representatives`, `app_settings`, `issue_escalations`, `audit_logs` + `point_in_ring()` / `point_in_ward()` |
+| `server/src/db/seed.js` | ward boundaries + Ward 32 polygon + verified representatives + demo seeding |
+| `server/test/escalation.test.mjs` | escalation end-to-end suite (40 steps) |
+| `server/test/jurisdiction.test.mjs` | municipal jurisdiction suite (44 steps) |

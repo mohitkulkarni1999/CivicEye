@@ -470,3 +470,175 @@ CREATE TRIGGER trg_wards_touch BEFORE UPDATE ON wards
 DROP TRIGGER IF EXISTS trg_escalations_touch ON issue_escalations;
 CREATE TRIGGER trg_escalations_touch BEFORE UPDATE ON issue_escalations
   FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+-- Municipal corporations (jurisdiction owners of wards) ----------------------
+-- PMC = Pune Municipal Corporation, PCMC = Pimpri-Chinchwad Municipal Corp.
+ALTER TABLE locations
+  ADD COLUMN IF NOT EXISTS corporation_code TEXT NOT NULL DEFAULT '';
+-- A point is always inside exactly one corporation's jurisdiction; a ward can
+-- never span corporations. This is the first-class gate that prevents a PCMC
+-- representative ever being shown for a PMC point (and vice-versa).
+CREATE TABLE IF NOT EXISTS corporations (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code       TEXT NOT NULL UNIQUE,
+  name       TEXT NOT NULL,
+  city       TEXT NOT NULL DEFAULT '',
+  is_active  BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO corporations (code, name, city)
+VALUES ('PMC', 'Pune Municipal Corporation', 'Pune'),
+       ('PCMC', 'Pimpri-Chinchwad Municipal Corporation', 'Pimpri-Chinchwad')
+ON CONFLICT (code) DO UPDATE SET
+  name = EXCLUDED.name, city = EXCLUDED.city, is_active = true;
+
+-- Ward registry gains corporation ownership + boundary provenance.
+ALTER TABLE wards
+  ADD COLUMN IF NOT EXISTS corporation_id UUID REFERENCES corporations(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS source            TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS source_url        TEXT NOT NULL DEFAULT '';
+
+CREATE INDEX IF NOT EXISTS idx_wards_corporation ON wards(corporation_id);
+-- One ward per corporation (legacy UNIQUE(city, ward_number) kept for the rows
+-- that predate corporation assignment).
+CREATE UNIQUE INDEX IF NOT EXISTS ux_wards_corp_number
+  ON wards(corporation_id, ward_number) WHERE corporation_id IS NOT NULL;
+
+-- Representative identity fields (source of truth for elected reps).
+ALTER TABLE representatives
+  ADD COLUMN IF NOT EXISTS corporation_id UUID REFERENCES corporations(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS party          TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS seat           TEXT NOT NULL DEFAULT '';
+
+CREATE INDEX IF NOT EXISTS idx_reps_corporation ON representatives(corporation_id);
+
+-- Issues capture the exact jurisdiction + resolution provenance.
+ALTER TABLE issues
+  ADD COLUMN IF NOT EXISTS corporation_id      UUID REFERENCES corporations(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS ward_id             UUID REFERENCES wards(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS resolution_source   TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS resolution_confidence TEXT NOT NULL DEFAULT '';
+
+CREATE INDEX IF NOT EXISTS idx_issues_ward ON issues(ward_id);
+CREATE INDEX IF NOT EXISTS idx_issues_corporation ON issues(corporation_id);
+
+-- Official ward boundaries as normalized ring points.
+--   ring_idx = 0   : outer ring of the ward polygon
+--   ring_idx > 0   : holes inside the outer ring
+-- A ward with no boundary rows cannot be polygon-matched (locality fallback).
+-- Coordinates are stored as lat/lng so point-in-polygon needs no PostGIS.
+CREATE TABLE IF NOT EXISTS ward_boundaries (
+  id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ward_id  UUID NOT NULL REFERENCES wards(id) ON DELETE CASCADE,
+  ring_idx INTEGER NOT NULL DEFAULT 0,
+  seq      INTEGER NOT NULL,
+  lat      DOUBLE PRECISION NOT NULL,
+  lng      DOUBLE PRECISION NOT NULL,
+  UNIQUE (ward_id, ring_idx, seq)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ward_boundaries_ward ON ward_boundaries(ward_id);
+
+-- Many-to-many ward <-> representative. Modern PMC/PCMC wards elect multiple
+-- corporators (seats A/B/C/D). wards.representative_id stays as the "primary"
+-- seat for backward compatibility; the join table is authoritative.
+CREATE TABLE IF NOT EXISTS ward_representatives (
+  ward_id          UUID NOT NULL REFERENCES wards(id) ON DELETE CASCADE,
+  representative_id UUID NOT NULL REFERENCES representatives(id) ON DELETE CASCADE,
+  seat             TEXT NOT NULL DEFAULT '',
+  is_current       BOOLEAN NOT NULL DEFAULT TRUE,
+  PRIMARY KEY (ward_id, representative_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ward_reps_rep ON ward_representatives(representative_id);
+
+-- Keep wards.representative_id in sync with the primary current seat.
+CREATE OR REPLACE FUNCTION sync_ward_primary_rep() RETURNS TRIGGER AS $$
+DECLARE
+  target UUID := COALESCE(NEW.ward_id, OLD.ward_id);
+BEGIN
+  UPDATE wards w SET representative_id = sub.rep_id
+  FROM (
+    SELECT wr.representative_id AS rep_id
+      FROM ward_representatives wr
+      JOIN representatives r ON r.id = wr.representative_id
+     WHERE wr.ward_id = target AND wr.is_current = true AND r.is_current = true
+     ORDER BY wr.seat = '' ASC, wr.seat ASC, wr.representative_id ASC
+     LIMIT 1
+  ) sub
+  WHERE w.id = target;
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_ward_reps_sync ON ward_representatives;
+CREATE TRIGGER trg_ward_reps_sync
+  AFTER INSERT OR UPDATE OR DELETE ON ward_representatives
+  FOR EACH ROW EXECUTE FUNCTION sync_ward_primary_rep();
+
+-- Admin-configurable escalation behaviour (e.g. which representatives to tag).
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO app_settings (key, value) VALUES ('escalation_tag_rule', 'TAG_SELECTED_REPRESENTATIVE')
+ON CONFLICT (key) DO NOTHING;
+
+-- Point-in-polygon (ray casting) over ward_boundaries. No PostGIS required.
+-- PNPOLY-style: a point is inside a ring when an even number of ring edges
+-- cross its horizontal ray. Coordinates are (lat, lng).
+CREATE OR REPLACE FUNCTION point_in_ring(
+  plat DOUBLE PRECISION,
+  plng DOUBLE PRECISION,
+  wid  UUID,
+  ring INTEGER
+) RETURNS BOOLEAN AS $$
+DECLARE
+  r         RECORD;
+  prev      RECORD;
+  have_prev BOOLEAN := FALSE;
+  inside    BOOLEAN := FALSE;
+BEGIN
+  FOR r IN SELECT lat, lng FROM ward_boundaries WHERE ward_id = wid AND ring_idx = ring ORDER BY seq
+  LOOP
+    IF NOT have_prev THEN
+      prev := r;
+      have_prev := TRUE;
+      CONTINUE;
+    END IF;
+    IF (r.lng > plng) <> (prev.lng > plng) THEN
+      IF (prev.lat + (plng - prev.lng) * (r.lat - prev.lat) / (r.lng - prev.lng)) > plat THEN
+        inside := NOT inside;
+      END IF;
+    END IF;
+    prev := r;
+  END LOOP;
+  RETURN inside;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION point_in_ward(
+  plat DOUBLE PRECISION,
+  plng DOUBLE PRECISION,
+  wid  UUID
+) RETURNS BOOLEAN AS $$
+DECLARE
+  hole INTEGER;
+BEGIN
+  IF NOT point_in_ring(plat, plng, wid, 0) THEN
+    RETURN FALSE;
+  END IF;
+  FOR hole IN SELECT DISTINCT ring_idx FROM ward_boundaries WHERE ward_id = wid AND ring_idx > 0
+  LOOP
+    IF point_in_ring(plat, plng, wid, hole) THEN
+      RETURN FALSE;
+    END IF;
+  END LOOP;
+  RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT;
